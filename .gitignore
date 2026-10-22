@@ -1,0 +1,41 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+project.private.config.json
+*.pem
+*.key
+*.p12
+*.pfx
+.private/
+private-data/
+credentials/
+
+# Dependencies and generated output
+node_modules/
+vendor/
+dist/
+build/
+coverage/
+.cache/
+.tmp/
+tmp/
+*.log
+*.tsbuildinfo
+storage/logs/
+storage/framework/
+bootstrap/cache/*.php
+
+# Local design and execution artifacts
+docs/superpowers/plans/
+docs/superpowers/specs/
+test-results/
+playwright-report/
+
+# Editor and operating system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
