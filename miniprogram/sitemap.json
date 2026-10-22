@@ -1,0 +1,4 @@
+{
+  "desc": "一方衣橱本地交互原型",
+  "rules": [{ "action": "allow", "page": "*" }]
+}

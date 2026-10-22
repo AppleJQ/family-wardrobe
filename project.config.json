@@ -1,0 +1,22 @@
+{
+  "appid": "wx80f51573314b7bd2",
+  "projectname": "family-wardrobe",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "miniprogram/",
+  "libVersion": "3.17.5",
+  "setting": {
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "uglifyFileName": false,
+    "enhance": true,
+    "useCompilerPlugins": ["typescript"],
+    "packNpmRelationList": [],
+    "babelSetting": { "ignore": [], "disablePlugins": [], "outputPath": "" }
+  },
+  "packOptions": {
+    "ignore": [{ "type": "folder", "value": ".tmp" }],
+    "include": []
+  },
+  "editorSetting": { "tabIndent": "insertSpaces", "tabSize": 2 }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "family-wardrobe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "一方衣橱 · 家庭智能衣橱微信小程序",
+  "scripts": {
+    "check": "tsc --noEmit && node scripts/check-project.cjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "miniprogram-api-typings": "5.2.3",
+    "typescript": "5.9.3"
+  },
+  "engines": { "node": ">=20" }
+}
