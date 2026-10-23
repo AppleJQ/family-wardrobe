@@ -1,0 +1,73 @@
+import cloud from 'wx-server-sdk';
+import { Collection, Entities, ImageStorage, ListOptions, Repository, Unit } from './model';
+import { normalizeImage } from './image';
+
+// The wx SDK declarations predate transaction typings. Keep the native boundary here.
+interface NativeDocument {
+  get(): Promise<{ data: Record<string, unknown> | null }>;
+  set(input: { data: Record<string, unknown> }): Promise<unknown>;
+}
+interface NativeQuery {
+  orderBy(field: string, direction: string): NativeQuery;
+  limit(limit: number): NativeQuery;
+  get(): Promise<{ data: unknown[] }>;
+}
+interface NativeUnit { collection(name: string): { doc(id: string): NativeDocument; where(filter: unknown): NativeQuery } }
+function unit(native: NativeUnit): Unit {
+  return {
+    async get<K extends Collection>(collection: K, id: string) {
+      try {
+        const { data } = await native.collection(collection).doc(id).get();
+        return (data || null) as unknown as Entities[K] | null;
+      } catch (error) {
+        // A missing document is expected; collection/network/permission failures must surface.
+        if (error instanceof Error && /document.*does not exist/i.test(error.message)) return null;
+        throw error;
+      }
+    },
+    async put<K extends Collection>(collection: K, document: Entities[K]) {
+      const { _id, ...data } = document;
+      await native.collection(collection).doc(_id).set({ data });
+    },
+  };
+}
+export function createRepository(): Repository {
+  const db = cloud.database();
+  const native = db as unknown as NativeUnit;
+  return {
+    ...unit(native),
+    transaction: <T>(work: (u: Unit) => Promise<T>): Promise<T> => db.runTransaction((tx: NativeUnit) => work(unit(tx))),
+    async list<K extends Collection>(collection: K, filter: Partial<Entities[K]>, options: ListOptions = {}) {
+      const and: unknown[] = [filter];
+      if (options.before) and.push(db.command.or([
+        { createdAt: db.command.lt(options.before.createdAt) },
+        { createdAt: options.before.createdAt, _id: db.command.lt(options.before.id) },
+      ]));
+      if (options.expiresBefore !== undefined) and.push({ uploadExpiresAt: db.command.lte(options.expiresBefore) });
+      const where = and.length > 1 ? db.command.and(and) : filter;
+      const { data } = await native.collection(collection).where(where).orderBy('createdAt', 'desc').orderBy('_id', 'desc').limit(options.limit || 100).get();
+      return data as Entities[K][];
+    },
+  };
+}
+
+export function createStorage(): ImageStorage {
+  return {
+    async upload(path, base64) {
+      const fileContent = await normalizeImage(base64);
+      const result = await cloud.uploadFile({ cloudPath: path, fileContent });
+      return result.fileID;
+    },
+    async remove(fileId) {
+      const result = await cloud.deleteFile({ fileList: [fileId] });
+      const row = result?.fileList[0];
+      if (row && row.status !== 0 && !/not.?exist/i.test(row.errMsg)) throw new Error('STORAGE_DELETE_FAILED');
+    },
+    async urls(fileIds) {
+      if (!fileIds.length) return {};
+      const result = await cloud.getTempFileURL({ fileList: fileIds.map(fileID => ({ fileID, maxAge: 300 })) });
+      if (!result) throw new Error('STORAGE_URL_FAILED');
+      return Object.fromEntries(result.fileList.filter(row => row.status === 0).map(row => [row.fileID, row.tempFileURL]));
+    },
+  };
+}

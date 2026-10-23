@@ -5,11 +5,20 @@
   "description": "一方衣橱 · 家庭智能衣橱微信小程序",
   "scripts": {
     "check": "tsc --noEmit && node scripts/check-project.cjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:cloud": "node scripts/build-cloud.cjs",
+    "check:cloud": "tsc -p cloud/tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@types/node": "20.19.43",
+    "@types/pngjs": "6.0.5",
+    "jpeg-js": "0.4.4",
     "miniprogram-api-typings": "5.2.3",
-    "typescript": "5.9.3"
+    "pngjs": "7.0.0",
+    "typescript": "5.9.3",
+    "wx-server-sdk": "4.0.2"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }

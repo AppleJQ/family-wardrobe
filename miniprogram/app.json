@@ -1,5 +1,5 @@
 {
-  "pages": ["pages/index/index"],
+  "pages": ["pages/cloud/index", "pages/index/index"],
   "window": {
     "navigationStyle": "custom",
     "backgroundColor": "#f8f7f2",

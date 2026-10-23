@@ -20,6 +20,7 @@ build/
 coverage/
 .cache/
 .tmp/
+.cloudbuild/
 tmp/
 *.log
 *.tsbuildinfo

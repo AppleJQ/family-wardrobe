@@ -1,3 +1,5 @@
+import { CLOUD_ENV } from './config/cloud';
+
 interface IAppOption {
   globalData: {
     environment: string;
@@ -6,8 +8,11 @@ interface IAppOption {
 }
 
 App<IAppOption>({
+  onLaunch() {
+    if (wx.cloud) wx.cloud.init({ env: CLOUD_ENV });
+  },
   globalData: {
-    environment: 'local-demo',
-    cloudEnvironment: 'wardrobe-dev-cloude-d5bv128b609',
+    environment: 'cloud-mvp',
+    cloudEnvironment: CLOUD_ENV,
   },
 });

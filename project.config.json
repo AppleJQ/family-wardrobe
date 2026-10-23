@@ -3,6 +3,7 @@
   "projectname": "family-wardrobe",
   "compileType": "miniprogram",
   "miniprogramRoot": "miniprogram/",
+  "cloudfunctionRoot": ".cloudbuild/",
   "libVersion": "3.17.5",
   "setting": {
     "es6": true,

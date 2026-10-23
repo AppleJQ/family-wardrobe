@@ -1,0 +1,61 @@
+<view class="app-shell cloud-shell" style="padding-top: {{statusBarHeight}}px;">
+  <view class="cloud-header"><image src="{{assets.imgSprout}}" mode="aspectFit" /><text>一方衣橱</text><text class="cloud-header-tag">家庭共享</text></view>
+  <scroll-view class="cloud-scroll" scroll-y>
+    <view class="page-content">
+      <view class="cloud-sync"><text>{{syncLabel}}</text><text class="link" bindtap="refresh" wx:if="{{family}}">刷新 ↻</text></view>
+      <view wx:if="{{error}}" class="cloud-error"><text>{{error}}</text><text wx:if="{{!ready}}" bindtap="bootstrap" class="link">重试连接</text><text wx:elif="{{family}}" bindtap="refresh" class="link">重新加载</text></view>
+      <view wx:if="{{!ready && loading}}" class="cloud-empty">正在连接你的家庭衣橱…</view>
+
+      <block wx:if="{{ready && !family}}">
+        <view class="intro"><text class="title-xl">一家人的衣物，<text>一起好好照顾</text></text><text class="muted">用各自的微信，走进同一个家庭衣橱。</text></view>
+        <view class="cloud-welcome"><image src="{{assets.imgSprout}}" mode="aspectFit" /><text>先为衣物安一个家</text><text class="muted">同一家庭可以共同查看、添加、编辑和删除衣物。不同家庭的数据彼此独立。</text></view>
+        <button class="primary-button" loading="{{saving}}" disabled="{{saving}}" bindtap="createFamily">创建我的家庭</button>
+        <view class="section-title"><text>已有家人创建了家庭？</text></view>
+        <view class="cloud-panel"><text class="cloud-label">粘贴家人发来的邀请码</text><textarea class="invite-input" maxlength="64" value="{{inviteInput}}" bindinput="inviteInput" placeholder="邀请码" /><button class="secondary-wide" loading="{{saving}}" disabled="{{saving || !inviteInput}}" bindtap="previewInvite">查看邀请</button><view wx:if="{{invitePreview}}" class="invite-preview"><text>邀请你加入「{{invitePreview}}」</text><text class="muted">所有有效家人均可编辑、删除全部家庭衣物。</text><button class="primary-button" disabled="{{saving}}" bindtap="acceptInvite">确认加入家庭</button></view></view>
+      </block>
+
+      <block wx:if="{{ready && family && screen === 'wardrobe'}}">
+        <view class="intro"><text class="title-xl">把日常，收拾得刚刚好</text><text class="muted">{{family.name}} · 每件衣物有归处。</text></view>
+        <view class="member-line"><view class="member-current"><view class="avatar">{{selectedMemberName[0]}}</view><text>{{selectedMemberName}}的衣橱</text></view><text class="tiny muted">家人一起管理</text></view>
+        <view class="chip-row member-chips"><view class="chip {{!selectedMember ? 'chip-active' : ''}}" data-id="" bindtap="chooseMember">全家</view><view wx:for="{{members}}" wx:key="id" class="chip {{selectedMember === item.id ? 'chip-active' : ''}}" data-id="{{item.id}}" bindtap="chooseMember">{{item.name}}</view></view>
+        <view class="chip-row categories"><view class="chip {{category === 'all' ? 'chip-active' : ''}}" data-category="all" bindtap="filterCategory">全部</view><view class="chip {{category === 'top' ? 'chip-active' : ''}}" data-category="top" bindtap="filterCategory">上衣</view><view class="chip {{category === 'bottom' ? 'chip-active' : ''}}" data-category="bottom" bindtap="filterCategory">裤子</view><view class="chip {{category === 'hat' ? 'chip-active' : ''}}" data-category="hat" bindtap="filterCategory">帽子</view></view>
+        <view wx:if="{{!garments.length && !loading && !error}}" class="cloud-empty"><image src="{{assets.imgShirt}}" mode="aspectFit" /><text>衣橱还空着</text><text class="muted">为家人添加第一件衣物吧。</text></view>
+        <view class="garment-grid"><view wx:for="{{garments}}" wx:key="id" class="garment-card" data-id="{{item.id}}" bindtap="openGarment"><view class="garment-photo"><image wx:if="{{item.image}}" src="{{item.image}}" mode="aspectFit" /><text wx:else class="muted">图片暂不可用，点开重试</text><text class="status-tag {{item.status}}">{{item.statusLabel}}</text></view><text class="garment-name">{{item.name}}</text><text class="location">⌾ {{item.location || '尚未设置位置'}}</text></view></view>
+        <text wx:if="{{loading}}" class="cloud-loading">正在读取衣橱…</text><button wx:if="{{cursor}}" class="secondary-wide" disabled="{{loading}}" bindtap="loadMore">加载更多</button>
+        <button class="primary-button" bindtap="openUpload"><image src="{{assets.imgPlus}}" mode="aspectFit" />添加衣物</button>
+      </block>
+
+      <block wx:if="{{ready && family && (screen === 'upload' || screen === 'detail')}}">
+        <view class="cloud-back link" data-screen="wardrobe" bindtap="nav">‹ 返回衣橱</view>
+        <view class="intro"><text class="title-xl">{{screen === 'upload' ? '让新衣物，找到归处' : '每一件，都好好照顾'}}</text><text class="muted">{{screen === 'upload' ? '一件一拍，确认信息后保存给全家。' : '家人都可以修改衣物信息。'}}</text></view>
+        <view wx:if="{{screen === 'upload'}}" class="cloud-photo" bindtap="choosePhoto"><image wx:if="{{imagePath}}" src="{{imagePath}}" mode="aspectFit" /><view wx:else class="cloud-photo-empty"><image src="{{assets.imgPlus}}" mode="aspectFit" /><text>拍照或从相册选择一张</text><text class="tiny muted">仅用于衣物，不上传人物照片</text></view></view>
+        <view wx:else class="cloud-photo" bindtap="previewImage"><image wx:if="{{selected.image}}" src="{{selected.image}}" mode="aspectFit" /><text class="tiny muted">点击查看照片</text></view>
+        <view class="cloud-panel cloud-form">
+          <view><text>名称</text><input maxlength="60" placeholder="给衣物起个名字" value="{{form.name}}" data-field="name" bindinput="formInput" /></view>
+          <view><text>归属档案</text><picker range="{{memberNames}}" value="{{form.memberIndex}}" data-field="memberIndex" bindchange="formPicker"><text>{{memberNames[form.memberIndex]}} ›</text></picker></view>
+          <view><text>分类</text><picker range="{{categoryNames}}" value="{{form.categoryIndex}}" data-field="categoryIndex" bindchange="formPicker"><text>{{categoryNames[form.categoryIndex]}} ›</text></picker></view>
+          <view><text>当前状态</text><picker range="{{statusNames}}" value="{{form.statusIndex}}" data-field="statusIndex" bindchange="formPicker"><text>{{statusNames[form.statusIndex]}} ›</text></picker></view>
+          <view><text>收纳位置</text><input maxlength="100" placeholder="例如：主卧衣柜左侧" value="{{form.location}}" data-field="location" bindinput="formInput" /></view>
+          <view><text>备注</text><input maxlength="500" placeholder="可选" value="{{form.notes}}" data-field="notes" bindinput="formInput" /></view>
+        </view>
+        <text class="tiny muted">保存后，同一家庭的家人均可查看、编辑和删除。</text>
+        <button class="primary-button" loading="{{saving}}" disabled="{{saving}}" bindtap="saveGarment">{{saving ? '正在保存…' : '确认并保存'}}</button>
+        <button wx:if="{{screen === 'detail'}}" class="cloud-danger" disabled="{{saving}}" bindtap="deleteGarment">删除这件衣物</button>
+      </block>
+
+      <block wx:if="{{ready && family && screen === 'account'}}">
+        <view class="intro"><text class="title-xl">一家的衣物，一起照顾</text><text class="muted">各自微信登录，共享一个家庭衣橱。</text></view>
+        <view class="home-card"><view class="avatar">家</view><view><text class="section-title-text">{{family.name}}</text><text class="muted">{{accounts.length}} 位登录家人 · {{members.length}} 个衣物档案</text></view><text wx:if="{{family.role === 'owner'}}" class="link" bindtap="renameFamily">改名</text></view>
+        <view class="section-title"><text>衣物归属档案</text><text class="link" bindtap="addMember">＋ 新增</text></view>
+        <view class="cloud-panel"><view wx:for="{{members}}" wx:key="id" class="cloud-list-row" data-id="{{item.id}}" bindtap="renameMember"><view class="avatar small">{{item.name[0]}}</view><text>{{item.name}}</text><text class="link">改名 ›</text></view></view><text class="tiny muted">可以为没有微信账号的孩子建立档案。档案用于整理衣物，不授予登录权限。</text>
+        <view class="section-title"><text>登录家人</text></view>
+        <view class="cloud-panel"><view wx:for="{{accounts}}" wx:key="userId" class="cloud-list-row" data-id="{{item.userId}}" bindtap="manageAccount"><text>{{item.label}}{{item.isSelf ? '（你）' : ''}}</text><text class="tiny muted">{{family.role === 'owner' && !item.isSelf ? '管理 ›' : '已加入'}}</text></view></view>
+        <block wx:if="{{family.role === 'owner'}}"><view class="section-title"><text>邀请家人</text></view><view class="cloud-panel"><text class="muted">邀请 24 小时有效，仅能加入一个账号。加入前会确认共享范围。</text><button class="secondary-wide" disabled="{{saving}}" bindtap="createInvite">生成新邀请</button><view wx:if="{{inviteToken}}"><text class="invite-code" selectable>{{inviteToken}}</text><view class="button-row"><button class="secondary-button" bindtap="copyInvite">复制邀请码</button><button class="secondary-button" disabled="{{saving}}" bindtap="revokeInvite">撤销此邀请</button></view></view></view></block>
+        <view class="section-title"><text>云端保存</text></view><view class="cloud-panel"><text>{{syncLabel}}</text><text class="muted">已保存的衣物信息与照片由家庭共享。退出或被移出后停止新访问；已经打开或下载的照片可能仍会保留。</text><button class="secondary-wide" disabled="{{loading}}" bindtap="refresh">立即同步</button></view>
+        <button class="cloud-danger" disabled="{{saving}}" bindtap="leaveFamily">退出当前家庭</button>
+      </block>
+      <view class="cloud-demo"><text class="link" bindtap="openDemo">查看 8 页设计演示 ↗</text><text class="tiny muted">演示使用本地示例数据</text></view>
+    </view>
+  </scroll-view>
+  <view wx:if="{{family}}" class="bottom-nav cloud-nav"><view class="nav-item {{screen !== 'account' ? 'active' : ''}}" data-screen="wardrobe" bindtap="nav"><image src="{{assets.imgShirt}}" mode="aspectFit" /><text>衣橱</text></view><view class="nav-item {{screen === 'account' ? 'active' : ''}}" data-screen="account" bindtap="nav"><image src="{{assets.imgUserRound}}" mode="aspectFit" /><text>我的家庭</text></view></view>
+</view>
