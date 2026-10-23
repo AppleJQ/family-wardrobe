@@ -25,6 +25,7 @@ Page({
     garments: [] as ViewGarment[], cursor: '', selected: null as ViewGarment | null,
     form: { ...emptyForm }, formDirty: false, categoryNames, statusNames, memberNames: [] as string[],
     imagePath: '', inviteToken: '', invitePreview: '', inviteInput: '', inviteId: '',
+    showPrivacy: false, privacyContractName: '隐私保护指引',
     assets: design.wardrobe,
   },
   onLoad() { this.bootstrap(); },
@@ -194,6 +195,11 @@ Page({
   async choosePhoto() {
     if (this.data.saving) return;
     try {
+      const privacy = await new Promise<WechatMiniprogram.GetPrivacySettingSuccessCallbackResult>((resolve, reject) => wx.getPrivacySetting({ success: resolve, fail: reject }));
+      if (privacy.needAuthorization) {
+        this.setData({ showPrivacy: true, privacyContractName: privacy.privacyContractName });
+        return;
+      }
       const picked = await wx.chooseMedia({ count: 1, mediaType: ['image'], sourceType: ['album', 'camera'] });
       if (!picked.tempFiles[0]) return;
       this.setData({ saving: true });
@@ -259,4 +265,12 @@ Page({
     if (this.data.screen === 'wardrobe') await this.loadGarments(false);
   },
   openDemo() { wx.navigateTo({ url: '/pages/index/index' }); },
+  agreePrivacy() { this.setData({ showPrivacy: false }); this.choosePhoto(); },
+  declinePrivacy() { this.setData({ showPrivacy: false }); },
+  viewPrivacy() {
+    wx.openPrivacyContract({ fail: () => toast('暂时无法打开隐私指引，请稍后重试') });
+  },
+  showHelp() {
+    wx.showModal({ title: '家庭衣橱使用说明', content: '创建家庭后，管理员可在“我的家庭”生成邀请。家人用各自微信加入，均可查看、编辑和删除全部家庭衣物。衣物档案只区分归属，不授予登录权限。照片仅用于衣物管理，请勿上传人物照片。图片与衣物信息保存在云端；删除衣物对全家生效。', showCancel: false });
+  },
 });

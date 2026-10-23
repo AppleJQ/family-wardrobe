@@ -1,5 +1,5 @@
 <view class="app-shell cloud-shell" style="padding-top: {{statusBarHeight}}px;">
-  <view class="cloud-header"><image src="{{assets.imgSprout}}" mode="aspectFit" /><text>一方衣橱</text><text class="cloud-header-tag">家庭共享</text></view>
+  <view class="cloud-header"><image src="{{assets.imgSprout}}" mode="aspectFit" /><text>小猪猪衣橱</text><text class="cloud-header-tag">家庭共享</text></view>
   <scroll-view class="cloud-scroll" scroll-y>
     <view class="page-content">
       <view class="cloud-sync"><text>{{syncLabel}}</text><text class="link" bindtap="refresh" wx:if="{{family}}">刷新 ↻</text></view>
@@ -54,8 +54,12 @@
         <view class="section-title"><text>云端保存</text></view><view class="cloud-panel"><text>{{syncLabel}}</text><text class="muted">已保存的衣物信息与照片由家庭共享。退出或被移出后停止新访问；已经打开或下载的照片可能仍会保留。</text><button class="secondary-wide" disabled="{{loading}}" bindtap="refresh">立即同步</button></view>
         <button class="cloud-danger" disabled="{{saving}}" bindtap="leaveFamily">退出当前家庭</button>
       </block>
+      <view class="cloud-help"><text class="link" bindtap="showHelp">使用说明</text><text class="link" bindtap="viewPrivacy">隐私保护指引</text></view>
+      <!-- development-demo:start -->
       <view class="cloud-demo"><text class="link" bindtap="openDemo">查看 8 页设计演示 ↗</text><text class="tiny muted">演示使用本地示例数据</text></view>
+      <!-- development-demo:end -->
     </view>
   </scroll-view>
   <view wx:if="{{family}}" class="bottom-nav cloud-nav"><view class="nav-item {{screen !== 'account' ? 'active' : ''}}" data-screen="wardrobe" bindtap="nav"><image src="{{assets.imgShirt}}" mode="aspectFit" /><text>衣橱</text></view><view class="nav-item {{screen === 'account' ? 'active' : ''}}" data-screen="account" bindtap="nav"><image src="{{assets.imgUserRound}}" mode="aspectFit" /><text>我的家庭</text></view></view>
+  <view wx:if="{{showPrivacy}}" class="privacy-mask"><view class="privacy-dialog"><text class="section-title-text">上传衣物照片前，请阅读</text><text class="muted">为保存衣物并与同一家庭的家人共享，需要使用你选择或拍摄的照片。你可以拒绝并继续浏览衣橱。</text><text class="link" bindtap="viewPrivacy">{{privacyContractName}}</text><button class="primary-button" id="agree-privacy" open-type="agreePrivacyAuthorization" bindagreeprivacyauthorization="agreePrivacy">同意并继续选图</button><button class="secondary-wide" bindtap="declinePrivacy">暂不使用</button></view></view>
 </view>

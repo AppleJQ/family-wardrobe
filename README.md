@@ -46,6 +46,7 @@ npm run build:cloud
 - `npm run check`：小程序类型与资源检查。
 - `npm run check:cloud`：云函数类型检查。
 - `npm run build:cloud`：生成六个函数到 `.cloudbuild/`，生成物不提交。
+- `npm run build:release`：生成独立的小程序发布项目到 `.tmp/release/`，仅包含真实衣橱，移除开发演示路由与素材。提审说明见 [0.1.0发布资料](docs/releases/0.1.0.md)。
 
 开发环境为 `wardrobe-dev-cloude-d5bv128b6099`，AppID为 `wx80f51573314b7bd2`。这些是公开标识，客户端不包含 AppSecret、云密钥或自建登录令牌。开发环境已部署五个业务事件函数与独立清理函数，未上传或发布小程序。参见 [云端接口及部署](cloud/README.md)。
 
