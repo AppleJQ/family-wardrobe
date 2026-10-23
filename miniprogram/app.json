@@ -3,8 +3,7 @@
   "window": {
     "navigationStyle": "custom",
     "backgroundColor": "#f8f7f2",
-    "backgroundTextStyle": "light",
-    "disableScroll": false
+    "backgroundTextStyle": "light"
   },
   "style": "v2",
   "sitemapLocation": "sitemap.json"

@@ -26,6 +26,7 @@ const toast = (title: string) => wx.showToast({ title, icon: 'none', duration: 1
 Page({
   data: {
     screen: 'wardrobe' as Screen,
+    scrollTop: 0,
     query: '',
     category: 'all' as GarmentCategory | 'all',
     member: store.currentMember(),
@@ -70,7 +71,7 @@ Page({
   },
 
   showScreen(screen: Screen) {
-    this.setData({ screen, showMembers: false });
+    this.setData({ screen, showMembers: false, scrollTop: 0 });
     this.refresh();
   },
 
@@ -89,7 +90,7 @@ Page({
 
   selectMember(event: WechatMiniprogram.TouchEvent) {
     store.selectMember(event.currentTarget.dataset.memberId as MemberId);
-    this.setData({ screen: 'wardrobe', query: '', category: 'all', showMembers: false });
+    this.setData({ screen: 'wardrobe', query: '', category: 'all', showMembers: false, scrollTop: 0 });
     this.refresh();
   },
 
@@ -105,7 +106,7 @@ Page({
 
   openGarment(event: WechatMiniprogram.TouchEvent) {
     const selected = toViewGarment(store.getGarment(event.currentTarget.dataset.id as string));
-    this.setData({ selectedGarment: selected, screen: 'detail' });
+    this.setData({ selectedGarment: selected, screen: 'detail', scrollTop: 0 });
   },
 
   editGarment() {
@@ -150,14 +151,14 @@ Page({
         id: `upload-${index}`, memberId: store.currentMember().id, name: ['白色棉质短袖', '鼠尾草绿直筒裤', '米色棒球帽'][index] || '新衣物', category: (['top', 'bottom', 'hat'][index] || 'top') as GarmentCategory,
         color: ['白色', '鼠尾草绿', '米色'][index] || '未设置', season: '夏季', material: '待确认', location: '待设置', notes: '', status: 'wearable', image: file.tempFilePath, version: 1, createdAt: '2026-10-22',
       }));
-      this.setData({ screen: 'upload', uploadGarments: picked, uploadIndex: 0 });
+      this.setData({ screen: 'upload', uploadGarments: picked, uploadIndex: 0, scrollTop: 0 });
       toast(`已选择 ${picked.length} 张照片`);
     }, fail: () => toast('已保留示例照片，可直接继续确认') });
   },
 
   openUpload() {
     const items = store.listGarments({ memberId: store.currentMember().id }).slice(0, 3).map(toViewGarment);
-    this.setData({ screen: 'upload', uploadGarments: items, uploadIndex: 0 });
+    this.setData({ screen: 'upload', uploadGarments: items, uploadIndex: 0, scrollTop: 0 });
   },
 
   changeUploadItem(event: WechatMiniprogram.TouchEvent) {
@@ -187,7 +188,7 @@ Page({
   },
 
   openFitting(event: WechatMiniprogram.TouchEvent) {
-    this.setData({ screen: 'fitting', taskCreated: false });
+    this.setData({ screen: 'fitting', taskCreated: false, scrollTop: 0 });
     if (event.currentTarget.dataset.id) toast('已带入这套搭配');
   },
 
