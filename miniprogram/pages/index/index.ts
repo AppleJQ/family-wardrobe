@@ -6,7 +6,7 @@ type ViewGarment = Garment & { statusLabel: string; categoryLabel: string; locat
 type ViewOutfit = Outfit & { items: ViewGarment[] };
 
 const store = createWardrobeStore();
-const categoryLabels: Record<GarmentCategory, string> = { top: '上衣', bottom: '裤子', hat: '帽子' };
+const categoryLabels: Record<GarmentCategory, string> = { onepiece: '整装', top: '上衣', bottom: '裤子', hat: '帽子' };
 const statusLabels: Record<Garment['status'], string> = { wearable: '可穿', laundry: '待洗', storage: '收纳中', retired: '已淘汰' };
 
 const toViewGarment = (garment: Garment): ViewGarment => ({

@@ -1,5 +1,5 @@
 export type MemberId = 'me' | 'family-a';
-export type GarmentCategory = 'top' | 'bottom' | 'hat';
+export type GarmentCategory = 'onepiece' | 'top' | 'bottom' | 'hat';
 export type GarmentStatus = 'wearable' | 'laundry' | 'storage' | 'retired';
 
 export interface Member {

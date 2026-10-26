@@ -16,13 +16,14 @@ function choice<T extends string>(value: unknown, values: readonly T[]): T {
   if (!values.includes(value as T)) return fail('INVALID_INPUT', '选项无效');
   return value as T;
 }
+const categoryValues: readonly Category[] = ['onepiece', 'top', 'bottom', 'hat'];
 const versionCheck = (actual: number, expected: unknown) => {
   if (actual !== expected) fail('CONFLICT', '衣物或档案已被家人更新，请刷新后重试');
 };
 function fields(input: Input, partial = false) {
   const patch: Partial<Garment> = {};
   if (!partial || input.name !== undefined) patch.name = text(input.name);
-  if (!partial || input.category !== undefined) patch.category = choice<Category>(input.category, ['top', 'bottom', 'hat']);
+  if (!partial || input.category !== undefined) patch.category = choice<Category>(input.category, categoryValues);
   if (input.memberId !== undefined) patch.memberId = text(input.memberId, 80);
   if (input.status !== undefined) patch.wearStatus = choice<WearStatus>(input.status, ['wearable', 'laundry', 'storage', 'retired']);
   for (const key of ['color', 'season', 'material', 'location', 'notes'] as const) {
@@ -270,7 +271,7 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
         const auth = await familyAuth(repo, userId);
         const filter: Partial<Garment> = { familyId: auth.family._id, status: 'active' };
         if (input.memberId) { filter.memberId = text(input.memberId, 80); await validMember(repo, auth.family._id, filter.memberId); }
-        if (input.category && input.category !== 'all') filter.category = choice<Category>(input.category, ['top', 'bottom', 'hat']);
+        if (input.category && input.category !== 'all') filter.category = choice<Category>(input.category, categoryValues);
         const limit = input.limit === undefined ? 20 : Number(input.limit);
         if (!Number.isInteger(limit) || limit < 1 || limit > 50) return fail('INVALID_INPUT', '分页大小无效');
         let before;

@@ -12,7 +12,7 @@ export interface Member extends Base {
   familyId: string; name: string; linkedUserId: string | null; sortOrder: number; status: 'active';
   createdBy: string; updatedBy: string; version: number;
 }
-export type Category = 'top' | 'bottom' | 'hat';
+export type Category = 'onepiece' | 'top' | 'bottom' | 'hat';
 export type WearStatus = 'wearable' | 'laundry' | 'storage' | 'retired';
 export interface Garment extends Base {
   familyId: string; memberId: string; name: string; category: Category; wearStatus: WearStatus;

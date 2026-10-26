@@ -36,6 +36,7 @@
         <view class="summary-card"><view><text class="summary-title">今天，有 26 件可穿</text><text class="tiny muted">待洗 3 · 收纳中 2 · 已淘汰 1</text></view><image src="{{assets.wardrobe.imgSlidersHorizontal}}" mode="aspectFit" /></view>
         <view class="chip-row categories">
           <view class="chip {{category === 'all' ? 'chip-active' : ''}}" data-category="all" bindtap="selectCategory">全部 {{member.garmentCount}}</view>
+          <view class="chip {{category === 'onepiece' ? 'chip-active' : ''}}" data-category="onepiece" bindtap="selectCategory">整装</view>
           <view class="chip {{category === 'top' ? 'chip-active' : ''}}" data-category="top" bindtap="selectCategory">上衣 14</view>
           <view class="chip {{category === 'bottom' ? 'chip-active' : ''}}" data-category="bottom" bindtap="selectCategory">裤子 10</view>
           <view class="chip {{category === 'hat' ? 'chip-active' : ''}}" data-category="hat" bindtap="selectCategory">帽子 8</view>

@@ -1,6 +1,19 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
+const miniRoot = path.join(root, 'miniprogram');
+function sourceBytes(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).reduce((total, entry) => {
+    const file = path.join(directory, entry.name);
+    return total + (entry.isDirectory() ? sourceBytes(file) : fs.statSync(file).size);
+  }, 0);
+}
+// Keep headroom below WeChat's 2 MiB main-package limit for compiled code and metadata.
+const previewBudget = 1.5 * 1024 * 1024;
+const bytes = sourceBytes(miniRoot);
+if (bytes > previewBudget) {
+  throw new Error(`Mini program source is ${bytes} bytes; preview budget is ${previewBudget} bytes. Optimize bundled assets before previewing.`);
+}
 const required = [
   'miniprogram/app.json',
   'miniprogram/app.ts',
@@ -30,4 +43,4 @@ const assetRefs = [...wxml.matchAll(/assets\.([a-z]+)\.([A-Za-z0-9]+)/g)];
 for (const [, page, key] of assetRefs) {
   if (!assetConfig.includes(`"${key}"`)) throw new Error(`Missing Figma asset mapping: ${page}.${key}`);
 }
-console.log(`Project structure OK; ${files.length} local Figma assets; 8 screen states wired.`);
+console.log(`Project structure OK; ${files.length} local Figma assets; 8 screen states wired; ${bytes}/${previewBudget} bytes preview budget.`);

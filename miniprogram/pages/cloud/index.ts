@@ -3,8 +3,8 @@ import { call, CloudError, CloudGarment, CloudMember, FamilyAccount, FamilySnaps
 
 type Screen = 'wardrobe' | 'account' | 'upload' | 'detail';
 type Category = CloudGarment['category'];
-const categories: Category[] = ['top', 'bottom', 'hat'];
-const categoryNames = ['上衣', '裤子', '帽子'];
+const categories: Category[] = ['onepiece', 'top', 'bottom', 'hat'];
+const categoryNames = ['整装', '上衣', '裤子', '帽子'];
 const statusValues: CloudGarment['status'][] = ['wearable', 'laundry', 'storage', 'retired'];
 const statusNames = ['可穿', '待洗', '收纳中', '已淘汰'];
 const toast = (title: string) => wx.showToast({ title, icon: 'none' });
