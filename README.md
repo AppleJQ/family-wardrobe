@@ -1,6 +1,15 @@
-# 一方衣橱 · 家庭智能衣橱
+# 小猪猪的家
 
 原生微信小程序（TypeScript / WXML / WXSS），采用微信云开发 Node.js 事件云函数、文档数据库与私有云存储。
+
+## 家庭应用改造
+
+- 默认打开家庭首页，展示家庭信息与“家庭衣橱”入口，底部统一为首页/我的家庭；首期仅衣橱一个业务模块。
+- 家庭首页及直接进入的家庭设置只读取家庭基础快照，不请求衣物、照片签名或智能任务；衣物在进入衣橱时加载。
+- 我的家庭统一管理家庭名称、家庭成员档案、登录家人及退出；按页面精简要求隐藏连接/刷新栏、引导副标题及邀请区。成员档案沿用原ID和归属，不授予登录权限；原邀请接口及权限保留。
+- 衣橱回收站从衣橱进入，清理旧搜索筛选后显示全部已删除衣物；保留衣物、智能能力和本机未完成批次。
+- 微信后台正式名称、简介、类目、备案和隐私资料需按实际上线范围更新；本地品牌改动不会自动修改平台资料。
+- 当前任务分支`wjq/feature/20261027/mp001-family-app`，worktree为`E:\project\.worktrees\family-wardrobe-mp001-family-app`；原衣橱分支及其配置保留。
 
 ## 当前状态
 
@@ -49,12 +58,12 @@ npm run check
 npm run build:cloud
 ```
 
-使用微信开发者工具打开本目录。默认首页为真实家庭衣橱 `pages/cloud/index`；`pages/index/index` 为原设计演示。Node.js 要求20.19以上。
+使用微信开发者工具打开本目录。默认首页为`pages/home/index`；`pages/cloud/index?section=wardrobe`为衣橱，`section=account`为家庭设置；`pages/index/index`为原设计演示。Node.js要求20.19以上。
 
 - `npm run check`：小程序类型与资源检查；源码及素材总量限制在 1.5 MiB 内，为微信 2 MiB 主包限制预留编译空间。
 - `npm run check:cloud`：云函数类型检查。
 - `npm run build:cloud`：生成8个函数到 `.cloudbuild/`，生成物不提交，按受影响函数部署。
-- `npm run build:release`：生成独立的小程序发布项目到 `.tmp/release/`，仅包含真实页面及其运行时依赖，移除开发演示路由与素材。版本说明见 [0.2.0交付资料](docs/releases/0.2.0.md)。
+- `npm run build:release`：生成独立的小程序发布项目到`.tmp/release/`，包含家庭首页与衣橱/家庭设置真实页面及运行时依赖，移除开发演示路由与素材。改造说明见[家庭应用改造](docs/releases/family-app.md)。
 
 开发项目可直接点击微信开发者工具的“预览”生成二维码，包含真实衣橱和8页设计演示。透明衣物素材已缩至最长边640px并使用带透明通道的PNG调色板压缩；新增素材也需控制体积，避免把Figma原始大图直接打入主包。
 

@@ -17,6 +17,10 @@ if (bytes > previewBudget) {
 const required = [
   'miniprogram/app.json',
   'miniprogram/app.ts',
+  'miniprogram/pages/home/index.ts',
+  'miniprogram/pages/home/index.wxml',
+  'miniprogram/pages/home/index.wxss',
+  'miniprogram/config/app.ts',
   'miniprogram/pages/index/index.wxml',
   'miniprogram/pages/index/index.wxss',
   'miniprogram/pages/index/index.ts',

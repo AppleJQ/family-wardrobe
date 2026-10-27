@@ -1,4 +1,5 @@
 import { design } from '../../config/design-assets';
+import { APP_NAME, APP_ROUTES } from '../../config/app';
 import { call, CloudError, CloudMember, FamilyAccount, FamilySnapshot, prepareImage } from '../../services/cloud';
 import { categories, categoryNames, emptyForm, viewGarment, ViewGarment, WardrobeGarment, Location, Outfit, wardrobe, outfitProblem } from '../../services/wardrobe';
 import { BatchEntry, createBatchEntry, persistBatch, resumeBatch, discardBatch, removeBatchPhoto, saveBatchEntry, formPatch, requestId, canRestartBatch } from '../../services/batch';
@@ -28,6 +29,7 @@ const garmentCache = new Map<string, { familyId: string; at: number; items: View
 
 Page({
   data: {
+    appName: APP_NAME, entryScreen: 'wardrobe' as 'wardrobe' | 'account',
     statusBarHeight: wx.getWindowInfo().statusBarHeight,
     ...emptySnapshot, screen: 'wardrobe' as Screen, ready: false, loading: false, saving: false,
     error: '', syncLabel: '正在连接云端', selectedMember: '', selectedMemberName: '全家', category: 'all',
@@ -47,7 +49,12 @@ Page({
     showPrivacy: false, privacyContractName: '隐私保护指引',
     assets: design.wardrobe,
   },
-  onLoad() { disposed = false; this.bootstrap(); },
+  onLoad(options: { section?: string } = {}) {
+    disposed = false;
+    const screen = options.section === 'account' ? 'account' : 'wardrobe';
+    this.setData({ entryScreen: screen, screen });
+    return this.bootstrap();
+  },
   async onShow() {
     if (!this.data.ready || !this.data.family) return;
     if (this.data.screen === 'wardrobe') { await this.refresh(); return; }
@@ -83,22 +90,23 @@ Page({
     loadGeneration++; detailGeneration++; scopeEpoch++; exportCancelled = true;
     this.setData({ replaceBatchIndex: -1, recognizingBatch: false, recognitionPending: false });
     this.setData({ ...emptySnapshot, loading: false, saving: false, garments: [], selected: null, cursor: '', selectedMember: '', selectedMemberName: '全家', memberNames: [], imagePath: '', inviteToken: '', inviteId: '', inviteInput: '', invitePreview: '', screen: 'wardrobe', formDirty: false, form: { ...emptyForm }, search: '', filterColor: '', category: 'all', selectedIds: [], selecting: false, locations: [], locationNames: ['未指定位置'], locationIds: [''], batch: [], batchIndex: -1, batchProgress: '', outfits: [], outfitCursor: '', outfitForm: { ...emptyOutfit }, outfitMemberName: '', suggestionCategory: '', outfitPicked: [], outfitCandidates: [], candidateCursor: '', pickedIds: [], aiStatus: null, aiTask: null, aiHistory: [], aiCursor: '', aiBusy: false, pendingAi: null, recommendations: [], aiMemberIndex: 0, aiOccasion: '', aiSeason: '', lockedIds: [], lockedNames: '', lockedGarments: [], exporting: false, exportPath: '', exportCount: 0, exportBytes: 0, cutoutPath: '', cutoutRequestId: '', cutoutVersion: 0, showPrivacy: false, error: '' });
+    this.setData({ screen: this.data.entryScreen });
   },
   async bootstrap() {
     if (this.data.loading) return;
     const scope = this.scope();
     this.setData({ loading: true, error: '' });
     try {
-      const snapshot = await call<HomeSnapshot>('bootstrapUser', 'home');
+      const snapshot = await call<FamilySnapshot | HomeSnapshot>('bootstrapUser', this.data.screen === 'account' ? 'bootstrap' : 'home');
       if (!this.active(scope)) return;
       const previousFamily = wx.getStorageSync('wardrobe_last_family_v02');
       if (typeof previousFamily === 'string' && previousFamily && previousFamily !== snapshot.family?.id) {
         discardBatch(previousFamily, resumeBatch(previousFamily)); wx.removeStorageSync(aiKey(previousFamily)); wx.removeStorageSync('wardrobe_last_family_v02');
       }
       this.applySnapshot(snapshot);
-      this.applyLocations(snapshot.locations);
-      const items = snapshot.garments.items.map(viewGarment);
-      this.setData({ ready: true, garments: items, cursor: snapshot.garments.cursor, listContext: this.garmentContext(), syncLabel: snapshot.family ? '已连接云端' : '尚未加入家庭' });
+      this.applyLocations('locations' in snapshot ? snapshot.locations : []);
+      const garments = 'garments' in snapshot ? snapshot.garments : { items: [], cursor: '' };
+      this.setData({ ready: true, garments: garments.items.map(viewGarment), cursor: garments.cursor, listContext: this.garmentContext(), syncLabel: snapshot.family ? '已连接云端' : '尚未加入家庭' });
       this.cacheGarments();
     } catch (error) { this.setData({ error: error instanceof Error ? error.message : '连接失败', syncLabel: '连接失败' }); }
     finally { if (!disposed) this.setData({ loading: false }); }
@@ -200,11 +208,25 @@ Page({
     return JSON.stringify([this.data.screen, this.data.selectedMember, this.data.category, this.data.search.trim(), this.data.filterColor.trim()]);
   },
   async nav(event: WechatMiniprogram.TouchEvent) {
-    if (this.data.saving) return;
+    if (this.data.saving || this.data.recognizingBatch || this.data.exporting || this.data.aiBusy || (!this.data.ready && this.data.loading && !this.data.family)) return;
+    const screen = event.currentTarget.dataset.screen as Screen;
+    if (!this.data.ready && !this.data.family) {
+      const entryScreen = screen === 'account' ? 'account' : 'wardrobe';
+      this.setData({ entryScreen, screen: entryScreen });
+      return this.bootstrap();
+    }
+    if (screen === this.data.screen) return;
+    if (this.data.screen === 'detail' && this.data.formDirty) {
+      const scope = this.scope();
+      const confirmation = await wx.showModal({ title: '离开衣物详情？', content: '尚未保存的修改会被放弃。' }).catch(() => null);
+      if (!confirmation?.confirm || !this.active(scope) || this.data.saving) return;
+      this.setData({ formDirty: false });
+    }
     detailGeneration++;
     loadGeneration++;
     this.clearCutout();
-    const screen = event.currentTarget.dataset.screen as Screen;
+    if (screen === 'account' || screen === 'wardrobe') this.setData({ entryScreen: screen });
+    if (screen === 'trash' && this.data.screen !== 'trash') this.setData({ selectedMember: '', selectedMemberName: '全家', category: 'all', search: '', filterColor: '' });
     this.setData({ screen, loading: false, selected: null, error: '', aiTask: null, cutoutPath: '', cutoutRequestId: '', cutoutVersion: 0, selecting: false, selectedIds: [] });
     if (screen === 'wardrobe' || screen === 'trash') {
       const cached = garmentCache.get(this.garmentContext());
@@ -216,6 +238,21 @@ Page({
     if (screen === 'locations') await this.loadLocations();
     if (screen === 'ai') await this.loadAiHistory(false);
     if (screen === 'wardrobe' && this.data.family) await this.refresh();
+    if (screen === 'account' && this.data.family) await this.refresh();
+  },
+  goHome() {
+    if (this.data.saving || this.data.recognizingBatch || this.data.exporting || this.data.aiBusy) return;
+    if (this.data.screen === 'detail' && this.data.formDirty) {
+      wx.showModal({ title: '返回首页？', content: '尚未保存的衣物修改会被放弃。', success: result => { if (result.confirm) this.returnHome(); } });
+      return;
+    }
+    this.returnHome();
+  },
+  returnHome() {
+    const pages = getCurrentPages();
+    const homeIndex = pages.findIndex(page => page.route === APP_ROUTES.home.slice(1));
+    if (homeIndex >= 0 && homeIndex < pages.length - 1) wx.navigateBack({ delta: pages.length - 1 - homeIndex });
+    else wx.reLaunch({ url: APP_ROUTES.home });
   },
   async chooseMember(event: WechatMiniprogram.TouchEvent) {
     if (this.data.saving || this.data.exporting) return;
@@ -233,13 +270,13 @@ Page({
     if (this.data.saving) return;
     const scope = this.scope();
     const name = await this.prompt('创建家庭', '例如：我们的家'); if (!name) return;
-    const memberName = await this.prompt('你的衣物档案名', '例如：我、爸爸'); if (!memberName || !this.active(scope)) return;
+    const memberName = await this.prompt('你的家庭成员档案名', '例如：我、爸爸'); if (!memberName || !this.active(scope)) return;
     await this.mutate(async () => {
       const snapshot = await call<FamilySnapshot>('families', 'create', { name, memberName }); if (!this.active(scope)) return;
       this.applySnapshot(snapshot);
       toast('家庭已创建');
     });
-    if (this.data.family) await this.loadGarments(false);
+    if (this.data.family && this.data.screen === 'wardrobe') await this.loadGarments(false);
   },
   prompt(title: string, placeholderText: string, content = ''): Promise<string> {
     return new Promise(resolve => wx.showModal({ title, editable: true, placeholderText, content,
@@ -272,7 +309,7 @@ Page({
       this.applySnapshot(snapshot);
       this.setData({ inviteInput: '', invitePreview: '' }); toast('已加入家庭');
     });
-    if (this.data.family) await this.loadGarments(false);
+    if (this.data.family && this.data.screen === 'wardrobe') await this.loadGarments(false);
   },
   async createInvite() {
     const scope = this.scope();
@@ -288,7 +325,7 @@ Page({
   },
   async addMember() {
     const scope = this.scope();
-    const name = await this.prompt('新增衣物归属档案', '例如：孩子'); if (!name) return;
+    const name = await this.prompt('新增家庭成员档案', '例如：孩子'); if (!name) return;
     if (!this.active(scope)) return;
     await this.mutate(async () => { await call('members', 'create', { name }); if (!this.active(scope)) return; const snapshot = await call<FamilySnapshot>('families', 'get'); if (this.active(scope)) this.applySnapshot(snapshot); });
   },
@@ -533,7 +570,7 @@ Page({
   async deleteGarment() {
     const selected = this.data.selected; if (!selected || this.data.saving) return;
     const scope = this.scope();
-    const confirmation = await wx.showModal({ title: '移入回收站？', content: '此操作对全家生效，30天内可在家庭回收站恢复。', confirmText: '移入', confirmColor: '#a64538' }).catch(async error => {
+    const confirmation = await wx.showModal({ title: '移入回收站？', content: '此操作对全家生效，30天内可在衣橱回收站恢复。', confirmText: '移入', confirmColor: '#a64538' }).catch(async error => {
       if (this.active(scope)) await this.report(error instanceof Error ? error : new Error('暂时无法打开确认，请稍后重试'));
       return null;
     });
@@ -583,7 +620,7 @@ Page({
     const action = event.currentTarget.dataset.action as string;
     if (!['batchDelete', 'restore', 'purge'].includes(action) || !this.data.selectedIds.length || this.data.saving) return;
     const scope = this.scope(), items = this.selectedRefs();
-    const confirmed = await wx.showModal({ title: action === 'purge' ? '永久删除选中衣物？' : action === 'restore' ? '恢复选中衣物？' : '移入家庭回收站？', content: action === 'purge' ? '照片与衣物记录将永久删除，全家均无法恢复。请确认后继续。' : action === 'restore' ? '恢复后重新回到全家的衣橱。' : '30天内可恢复；到期后将永久清理。', confirmColor: action === 'purge' ? '#a64538' : '#60794e', confirmText: action === 'purge' ? '永久删除' : '确认' });
+    const confirmed = await wx.showModal({ title: action === 'purge' ? '永久删除选中衣物？' : action === 'restore' ? '恢复选中衣物？' : '移入衣橱回收站？', content: action === 'purge' ? '照片与衣物记录将永久删除，全家均无法恢复。请确认后继续。' : action === 'restore' ? '恢复后重新回到全家的衣橱。' : '30天内可恢复；到期后将永久清理。', confirmColor: action === 'purge' ? '#a64538' : '#60794e', confirmText: action === 'purge' ? '永久删除' : '确认' });
     if (!confirmed.confirm || !this.active(scope)) return;
     await this.mutate(async () => {
       const result = await wardrobe<{ pending?: number }>(action, { items });

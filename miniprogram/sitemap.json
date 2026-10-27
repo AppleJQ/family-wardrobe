@@ -1,4 +1,4 @@
 {
-  "desc": "一方衣橱本地交互原型",
-  "rules": [{ "action": "allow", "page": "*" }]
+  "desc": "小猪猪的家：家庭共享工具与家庭衣橱",
+  "rules": [{ "action": "disallow", "page": "*" }]
 }

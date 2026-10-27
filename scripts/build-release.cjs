@@ -35,20 +35,26 @@ function compile(file) {
   }
 }
 compile('app.ts');
-compile('pages/cloud/index.ts');
-const markup = read('pages/cloud/index.wxml').replace(/\s*<!-- development-demo:start -->[\s\S]*?<!-- development-demo:end -->/, '');
-if (/openDemo|设计演示/.test(markup)) throw new Error('Development UI remains in release');
-write('pages/cloud/index.wxml', markup);
-write('pages/cloud/index.json', read('pages/cloud/index.json'));
-write('pages/cloud/index.wxss', read('pages/cloud/index.wxss').replace('@import "../index/index.wxss";', '@import "../../styles/design.wxss";'));
+const app = JSON.parse(read('app.json'));
+const releasePages = ['pages/home/index', 'pages/cloud/index'];
+if (app.pages[0] !== releasePages[0] || releasePages.some(page => !app.pages.includes(page))) throw new Error('Family release pages are not registered');
+const markups = [];
+for (const page of releasePages) {
+  compile(`${page}.ts`);
+  const markup = read(`${page}.wxml`).replace(/\s*<!-- development-demo:start -->[\s\S]*?<!-- development-demo:end -->/, '');
+  if (/openDemo|设计演示/.test(markup)) throw new Error('Development UI remains in release');
+  markups.push(markup);
+  write(`${page}.wxml`, markup);
+  write(`${page}.json`, read(`${page}.json`));
+  write(`${page}.wxss`, read(`${page}.wxss`).replace('@import "../index/index.wxss";', '@import "../../styles/design.wxss";'));
+}
 write('styles/design.wxss', read('pages/index/index.wxss'));
 write('app.wxss', read('app.wxss'));
-const app = JSON.parse(read('app.json'));
-app.pages = ['pages/cloud/index'];
+app.pages = releasePages;
 write('app.json', JSON.stringify(app, null, 2) + '\n');
-write('sitemap.json', JSON.stringify({ desc: '小猪猪衣橱家庭共享衣物管理', rules: [{ action: 'disallow', page: '*' }] }, null, 2) + '\n');
+write('sitemap.json', read('sitemap.json'));
 const design = JSON.parse(read('config/design-assets.ts').replace(/^export const design = /, '').replace(/ as const;\s*$/, ''));
-const keys = [...new Set([...markup.matchAll(/assets\.(\w+)/g)].map(match => match[1]))];
+const keys = [...new Set([...markups.join('\n').matchAll(/assets\.(\w+)/g)].map(match => match[1]))];
 const assets = {};
 for (const key of keys) {
   const asset = design.wardrobe[key];
@@ -58,7 +64,7 @@ for (const key of keys) {
 }
 write('config/design-assets.js', `exports.design = ${JSON.stringify({ wardrobe: assets })};\n`);
 const project = JSON.parse(fs.readFileSync(path.join(root, 'project.config.json'), 'utf8'));
-project.projectname = 'family-wardrobe-release';
+project.projectname = 'family-home-release';
 delete project.cloudfunctionRoot;
 project.setting.useCompilerPlugins = [];
 project.packOptions = { ignore: [], include: [] };
@@ -79,4 +85,4 @@ const bytes = files.reduce((sum, file) => sum + file.bytes, 0);
 if (bytes > 2 * 1024 * 1024 || files.some(file => /\.png$|pages\/index\//.test(file.path))) throw new Error('Unexpected release package content');
 const revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 fs.writeFileSync(path.join(output, 'release-manifest.json'), JSON.stringify({ version: '0.2.0', revision, builtAt: new Date().toISOString(), bytes, assets: keys, files }, null, 2) + '\n');
-console.log(`Release prepared: ${output}; ${files.length} files, ${bytes} bytes, ${keys.length} icons; one cloud page, no demo photos.`);
+console.log(`Release prepared: ${output}; ${files.length} files, ${bytes} bytes, ${keys.length} icons; ${releasePages.length} real pages, no demo photos.`);

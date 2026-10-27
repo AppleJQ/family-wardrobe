@@ -1,0 +1,18 @@
+<view class="home-shell" style="padding-top: {{statusBarHeight}}px;">
+  <view class="home-header"><image src="{{assets.imgSprout}}" mode="aspectFit" /><text>{{appName}}</text></view>
+  <scroll-view class="home-scroll" scroll-y>
+    <view class="home-content">
+      <view class="home-intro"><text class="home-eyebrow">我们的生活，从家开始</text><text class="home-title">把一家人的日常，<text>放在一起。</text></text><text class="home-subtitle">小事有处安放，生活井井有条。</text></view>
+      <view wx:if="{{loading}}" class="family-summary home-skeleton"><view class="family-symbol">家</view><view><view class="skeleton-line" /><text>正在打开我们的家…</text></view></view>
+      <view wx:elif="{{error}}" class="home-error"><text>{{error}}</text><button class="home-secondary" bindtap="refresh">重新加载</button></view>
+      <block wx:elif="{{ready}}">
+        <view wx:if="{{!family}}" class="family-welcome"><view class="family-symbol">家</view><text class="welcome-title">给一家人的日常，安个家</text><text class="home-subtitle">用各自的微信，创建或加入同一个家庭。</text><button class="home-primary" bindtap="openFamily">创建或加入家庭</button></view>
+        <view class="home-section-title"><text>家里的小事</text><text class="home-section-note">一起打理，轻松一点</text></view>
+        <view wx:if="{{family}}" class="module-card" bindtap="openWardrobe"><view class="module-top"><view class="module-icon"><image src="{{assets.imgShirt}}" mode="aspectFit" /></view><text class="module-tag">家庭共享</text></view><text class="module-title">家庭衣橱</text><text class="module-description">全家人的衣物，收进一个衣橱。<text>拍照收录，按人整理，随时找到。</text></text><view class="module-bottom"><text>打开衣橱</text><text>↗</text></view></view>
+        <view wx:else class="module-card module-unjoined"><view class="module-icon"><image src="{{assets.imgShirt}}" mode="aspectFit" /></view><text class="module-title">家庭衣橱</text><text class="module-description">加入家庭后，和家人一起收录、整理衣物。</text></view>
+      </block>
+      <view class="home-footer"><text>一家人的日常，慢慢照顾。</text><text class="privacy-link" bindtap="viewPrivacy">隐私保护指引</text></view>
+    </view>
+  </scroll-view>
+  <view class="home-nav"><view class="home-nav-item active"><image src="{{assets.imgSprout}}" mode="aspectFit" /><text>首页</text></view><view class="home-nav-item" bindtap="openFamily"><image src="{{assets.imgUserRound}}" mode="aspectFit" /><text>我的家庭</text></view></view>
+</view>

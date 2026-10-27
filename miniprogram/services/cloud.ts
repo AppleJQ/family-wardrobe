@@ -23,7 +23,7 @@ export async function call<T>(name: string, action: string, data: Record<string,
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const request = wx.cloud.callFunction({ name, data: { ...data, action }, config: { env: CLOUD_ENV } });
-    response = action === 'home' ? await Promise.race([request, new Promise<never>((_resolve, reject) => {
+    response = (action === 'home' || (name === 'bootstrapUser' && action === 'bootstrap')) ? await Promise.race([request, new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => reject(new CloudError('READ_TIMEOUT', '连接较慢，请点击重新加载再试')), 15000);
     })]) : await request;
   } catch (error) {

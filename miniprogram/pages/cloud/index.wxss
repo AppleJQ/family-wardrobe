@@ -39,6 +39,7 @@
 .cloud-list-row:last-child { border-bottom: none; }
 .cloud-list-row > text:last-child { margin-left: auto; }
 .cloud-back { margin-bottom: 20rpx; }
+.wardrobe-tools { display: flex; justify-content: flex-end; margin: 32rpx 0 12rpx; font-size: 24rpx; }
 .cloud-loading { display: block; text-align: center; padding: 25rpx; color: #7b8274; font-size: 24rpx; }
 .cloud-danger { background: transparent; color: #a64538; font-size: 27rpx; margin: 28rpx 0; }
 button.batch-clear-button { display: flex; align-items: center; justify-content: center; width: 100%; height: 82rpx; margin: 20rpx 0 0; padding: 0 20rpx; border: 1rpx solid #e4beb4; border-radius: 22rpx; background: #faece7; color: #a64538; font-size: 26rpx; font-weight: 600; white-space: nowrap; }
@@ -48,6 +49,7 @@ button.batch-clear-button { display: flex; align-items: center; justify-content:
 .privacy-dialog > text { display: block; margin-bottom: 24rpx; line-height: 1.7; }
 .cloud-nav { position: relative; flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom); height: 106rpx; }
 .cloud-nav .nav-item { flex: 1; }
+.cloud-nav .nav-pending { opacity: .45; }
 button { box-sizing: border-box; line-height: 1.4; font-family: inherit; }
 button::after { border: none; }
 button.primary-button { width: 100%; margin: 26rpx 0; font-size: 28rpx; }
