@@ -125,7 +125,7 @@
         <view class="section-title"><text>家庭整理</text></view><view class="cloud-panel"><view class="cloud-list-row" data-screen="trash" bindtap="nav"><text>家庭回收站</text><text class="link">30天可恢复 ›</text></view></view>
         <button class="cloud-danger" disabled="{{saving}}" bindtap="leaveFamily">退出当前家庭</button>
       </block>
-      <view class="cloud-help"><text class="link" bindtap="showHelp">使用说明</text><text class="link" bindtap="viewPrivacy">隐私保护指引</text></view>
+      <view class="cloud-help"><text class="link" bindtap="viewPrivacy">隐私保护指引</text></view>
     </view>
   </scroll-view>
   <view wx:if="{{family}}" class="bottom-nav cloud-nav"><view class="nav-item {{screen === 'wardrobe' || screen === 'upload' || screen === 'detail' ? 'active' : ''}}" data-screen="wardrobe" bindtap="nav"><image src="{{assets.imgShirt}}" mode="aspectFit" /><text>衣橱</text></view><view class="nav-item {{screen === 'account' || screen === 'trash' || screen === 'locations' ? 'active' : ''}}" data-screen="account" bindtap="nav"><image src="{{assets.imgUserRound}}" mode="aspectFit" /><text>我的家庭</text></view></view>

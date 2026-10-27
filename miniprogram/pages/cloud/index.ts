@@ -328,7 +328,7 @@ Page({
     if (this.data.saving || !this.data.family) return;
     const scope = this.scope(), index = this.data.batchIndex, item = this.data.batch[index];
     if (!item || !canRestartBatch(item)) return;
-    const confirmation = await wx.showModal({ title: '更换照片，重新录入本张？', content: '原请求被拒绝或草稿已失效。选择新照片后使用新请求，全部信息可重新确认；本批其他照片和已保存项保留。', confirmText: '选择新照片' });
+    const confirmation = await wx.showModal({ title: '更换照片，重新录入本张？', content: '原请求被拒绝或草稿已失效。选择新照片后使用新请求，全部信息可重新确认；本批其他照片和已保存项保留。', confirmText: '更换照片' });
     if (!confirmation.confirm || !this.active(scope) || this.data.batch[index]?.id !== item.id) return;
     this.setData({ replaceBatchIndex: index, photoCount: 1 }); await this.choosePhoto();
   },
@@ -517,9 +517,13 @@ Page({
     this.mutate(async () => { const { url } = await call<{ url: string }>('garments', 'image', { garmentId: id }); if (url && this.active(scope)) wx.previewImage({ urls: [url] }); });
   },
   async deleteGarment() {
-    const selected = this.data.selected; if (!selected) return;
+    const selected = this.data.selected; if (!selected || this.data.saving) return;
     const scope = this.scope();
-    const confirmation = await wx.showModal({ title: '移入回收站？', content: '此操作对全家生效，30天内可在家庭回收站恢复。', confirmText: '移入回收站', confirmColor: '#a64538' }); if (!confirmation.confirm || !this.active(scope)) return;
+    const confirmation = await wx.showModal({ title: '移入回收站？', content: '此操作对全家生效，30天内可在家庭回收站恢复。', confirmText: '移入', confirmColor: '#a64538' }).catch(async error => {
+      if (this.active(scope)) await this.report(error instanceof Error ? error : new Error('暂时无法打开确认，请稍后重试'));
+      return null;
+    });
+    if (!confirmation?.confirm || !this.active(scope) || this.data.selected?.id !== selected.id) return;
     await this.mutate(async () => { await call('garments', 'delete', { garmentId: selected.id, version: selected.version }); if (this.active(scope)) { this.setData({ selected: null, screen: 'wardrobe' }); toast('已移入回收站'); } });
     if (this.data.screen === 'wardrobe') await this.loadGarments(false);
   },
@@ -900,8 +904,5 @@ Page({
   declinePrivacy() { this.setData({ showPrivacy: false, replaceBatchIndex: -1 }); },
   viewPrivacy() {
     wx.openPrivacyContract({ fail: () => toast('暂时无法打开隐私指引，请稍后重试') });
-  },
-  showHelp() {
-    wx.showModal({ title: '家庭衣橱使用说明', content: '家人用各自微信加入后，均可查看和修改全家衣物。档案只区分归属，不授予登录权限。一批最多9张，选图完成后自动智能识别名称和颜色，可手动修正后保存。识别失败可手动填写。保存中断可继续，已成功项不重复保存。批量整理最多20件。删除后30天内可在回收站恢复，永久删除无法恢复。去背景可预览透明图片，点击“替换原图”后更新衣物照片。导出包含照片及清单，请自行决定分享范围。', showCancel: false });
   },
 });
