@@ -14,6 +14,7 @@
 | members | list / create / rename | create: name；rename: memberId, name, version |
 | garments | beginUpload | memberId, name, category；可选requestId/status/location/locationId/notes/color/season/material |
 | garments | upload | garmentId, base64，仅草稿原上传者 |
+| garments | save | 新录入单次保存：beginUpload同一表单参数、requestId、base64，可选transparent；返回衣物视图，沿用同编号幂等 |
 | garments | list | 与wardrobe.list共用搜索/组合筛选与分页契约，见V0.2说明 |
 | garments | get / image | garmentId，服务端映射实际文件ID |
 | garments | update / delete | garmentId, version；update另需patch |
@@ -150,6 +151,11 @@ V0.2页面已接入智能识别/推荐。status同时返回发起账号今日全
 - 桶family-wardrobe-cutout-1306311302，上海，私有读写。执行角色临时凭据签名，不配置新增长期Key。临时对象仅wardrobe-cutouts/v1/，生命周期1天；成功任务6小时有效，PNG重新编码去元数据、缩小至512KB内以适配微信函数返回。
 - garments.cutouts按原图/模式记录任务，事务领取避免并发重复费用；不改变衣物用户版本。users.cutoutDay/cutoutCalls每日最多30次，未知/运行不会自动重提交，显式restart新编号才重开。缓存临时读取失败只重查，已过期/确认对象缺失可显式再生成。
 - apply复用已完成且未过期的同一预览任务，在私有云存储持久化PNG并保留透明通道；事务核对源照片、任务及version后切换imageFileId/cloudPath并递增version，不调用生成接口、不增加处理次数。appliedCutout识别已应用请求，响应丢失可重试；retainedImagePaths记录原图及上传前登记的候选路径，永久清理/过期补偿会一并删除，晚到上传重新进入补偿队列。客户端按钮为“替换原图”，只更新照片与版本，不覆盖未保存表单。
+- 保存前照片：cutout.processPhoto（requestId、base64）及getPhoto（requestId），仅当前微信账号及其有效家庭访问。服务端校验并规范化原图后放入相同临时私有桶，以60秒签名链接交给通用抠图，完成后移除临时源图；结果6小时可查询，临时对象生命周期仍1天。users.photoCutouts内部记录最多60个、保留24小时，请求新建限6小时内，沿用同一每日30次计数；已运行/未知只查询，不静默重做。接口不创建衣物、不返回对象键或签名链接。
+- garments.upload增加可选transparent=true：服务端仍核对草稿、上传者、家庭及期限，验证PNG签名/CRC/尺寸/512KB并去除元数据，以.png路径保存透明图；普通图片继续原JPEG规范化。客户端只有采用保存前抠图时发送此项，保存成功前仍是本机批次。
+- save将建草稿与上传认领合入同一事务，存储完成后第二次事务核对权限/成员/代次并激活；active同编号重试不再上传，不同表单仍拒绝。旧beginUpload/upload保留。adapter对事务内部请求排队，事务外读取仍并行，避免CloudBase TransactionBusy。
+- list/trash保留开始及图片URL签发后的两次鉴权，删除重复入口/签名前读取；home契约不变。runtime/wardrobe-runtime显式__measure=true返回数字performance耗时/计数，普通响应无此字段，不记录身份、表单、图片或链接。
+- 普通JPEG需完整解码验证；基线三通道、方向正常且不超过1600边长时，直接移除APP/COM和尾随数据，避免重新有损编码。旋转、尺寸超限、Adobe/特殊JPEG以及PNG继续原规范化，透明PNG沿用专门上传流程。
 - 生成和读取结果前后fresh家庭/衣物鉴权。撤权、删除、换图的迟到结果不返回；付费结果已提交后的临时响应失败保留结果供重查。原图不覆盖，私有派生文件生命周期清理。
 - CI可能在PNG的IEND后附加数据，按完整PNG块边界截取并执行CRC验证再重编码；失败原图保留。通过官方COS SDK生成签名，CI请求不自动重试、不跟随重定向。
 

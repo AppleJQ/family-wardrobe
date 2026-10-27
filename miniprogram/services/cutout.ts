@@ -16,6 +16,8 @@ function displayResult(result: CutoutResult): CutoutResult {
 export const getCutout = async (garmentId: string, mode: CutoutMode) => displayResult(await call<CutoutResult>('cutout', 'get', { garmentId, mode }));
 export const processCutout = async (garmentId: string, mode: CutoutMode, requestId: string, restart = false) => displayResult(await call<CutoutResult>('cutout', 'process', { garmentId, mode, requestId, restart }));
 export const applyCutout = (garmentId: string, requestId: string, version: number) => call<{ version: number }>('cutout', 'apply', { garmentId, requestId, version, mode: 'common' });
+export const getPhotoCutout = async (requestId: string) => displayResult(await call<CutoutResult>('cutout', 'getPhoto', { requestId }));
+export const processPhotoCutout = async (requestId: string, base64: string) => displayResult(await call<CutoutResult>('cutout', 'processPhoto', { requestId, base64 }));
 export function saveCutoutPreview(base64: string): string {
   if (!base64.startsWith('iVBORw0KGgo') || base64.length > Math.ceil(2 * 1024 * 1024 / 3) * 4) throw new Error('抠图结果无法读取，请重查');
   const path = `${wx.env.USER_DATA_PATH}/cutout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`;

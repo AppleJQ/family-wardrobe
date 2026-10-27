@@ -119,7 +119,6 @@ export function createWardrobeService(repo: Repository, storage: ImageStorage, n
     return result;
   }
   async function sign(userId: string, familyId: string, items: Garment[]) {
-    await auth(repo, userId, familyId);
     const urls = await storage.urls(items.filter(item => item.imageFileId).map(item => item.imageFileId));
     await auth(repo, userId, familyId);
     return items.map(item => garmentView(item, urls[item.imageFileId] || ''));
@@ -334,11 +333,11 @@ export function createWardrobeService(repo: Repository, storage: ImageStorage, n
     if (!identity.openid || identity.appid !== 'wx80f51573314b7bd2' || !['wx_client', 'wx_devtools'].includes(identity.source)) return fail('UNAUTHENTICATED', '仅支持本小程序的微信登录');
     const userId = hash(`wx/${identity.appid}/${identity.openid}`).slice(0, 40);
     if (input.action === 'home') return home(userId, input, knownUser);
-    await auth(repo, userId);
-    if (input.action === 'status') return { version: '0.2', batchLimit: 20, trashRetentionDays: 30, capabilities: ['search', 'bulk', 'trash', 'locations', 'outfits', 'export'] };
     if (input.action === 'list') return garmentPage(userId, input);
     if (input.action === 'trash') return garmentPage(userId, input, true);
     if (input.action === 'exportPage') return garmentPage(userId, input, false, true);
+    await auth(repo, userId);
+    if (input.action === 'status') return { version: '0.2', batchLimit: 20, trashRetentionDays: 30, capabilities: ['search', 'bulk', 'trash', 'locations', 'outfits', 'export'] };
     if (['batchUpdate', 'batchDelete', 'restore', 'purge'].includes(String(input.action))) return bulk(userId, input);
     if (String(input.action).startsWith('locations.')) return locations(userId, input);
     if (String(input.action).startsWith('outfits.')) return outfits(userId, input);

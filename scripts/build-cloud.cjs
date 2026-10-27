@@ -8,9 +8,9 @@ const groups = ['bootstrapUser', 'families', 'familyInvites', 'members', 'garmen
 for (const name of groups) {
   const dir = path.join(output, name);
   fs.mkdirSync(dir, { recursive: true });
-  const files = ['model.js', 'service.js', 'adapter.js', 'runtime.js', 'cleanup.js', 'image.js', 'wardrobe-service.js', 'wardrobe-runtime.js'];
+  const files = ['model.js', 'service.js', 'adapter.js', 'runtime.js', 'cleanup.js', 'image.js', 'wardrobe-service.js', 'wardrobe-runtime.js', 'performance.js'];
   if (name === 'ai') files.push('ai-runtime.js', 'ai-service.js', 'deepseek.js');
-  if (name === 'cutout') files.push('cutout-runtime.js', 'cutout-service.js', 'ci-cutout.js');
+  if (name === 'cutout') files.push('cutout-runtime.js', 'cutout-service.js', 'ci-cutout.js', 'photo-cutout-service.js');
   for (const file of files) fs.copyFileSync(path.join(root, '.tmp/cloud-compiled', file), path.join(dir, file));
   const entry = name === 'cleanupUploads' ? "exports.main = require('./cleanup').cleanup;\n"
     : name === 'cutout' ? "exports.main = require('./cutout-runtime').invokeCutout;\n" : name === 'ai' ? "exports.main = require('./ai-runtime').invokeAi;\n" : name === 'wardrobe' ? "exports.main = require('./wardrobe-runtime').invokeWardrobe;\n" : `exports.main = event => require('./runtime').invoke('${name}', event);\n`;

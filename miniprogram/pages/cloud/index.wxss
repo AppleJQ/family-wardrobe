@@ -41,6 +41,7 @@
 .cloud-back { margin-bottom: 20rpx; }
 .cloud-loading { display: block; text-align: center; padding: 25rpx; color: #7b8274; font-size: 24rpx; }
 .cloud-danger { background: transparent; color: #a64538; font-size: 27rpx; margin: 28rpx 0; }
+button.batch-clear-button { display: flex; align-items: center; justify-content: center; width: 100%; height: 82rpx; margin: 20rpx 0 0; padding: 0 20rpx; border: 1rpx solid #e4beb4; border-radius: 22rpx; background: #faece7; color: #a64538; font-size: 26rpx; font-weight: 600; white-space: nowrap; }
 .cloud-help { display: flex; justify-content: center; gap: 40rpx; margin: 38rpx 0; font-size: 24rpx; }
 .privacy-mask { position: fixed; inset: 0; z-index: 100; background: rgba(25, 37, 28, .45); display: flex; align-items: center; justify-content: center; padding: 40rpx; }
 .privacy-dialog { background: #fffefa; padding: 40rpx; border-radius: 28rpx; width: 100%; }

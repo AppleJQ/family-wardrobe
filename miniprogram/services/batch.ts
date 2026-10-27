@@ -5,9 +5,11 @@ export interface BatchEntry {
   id: string; path: string; form: GarmentForm; requestId: string; garmentId: string;
   status: 'pending' | 'saving' | 'failed' | 'saved'; error: string; errorCode?: string; canRestart?: boolean; beginUncertain?: boolean;
   submittedPatch?: Record<string, unknown>;
+  saveMode?: 'combined';
   editedFields?: Array<'name' | 'color'>;
   recognition?: { requestId: string; memberId: string; taskId?: string;
     status: 'running' | 'succeeded' | 'failed' | 'unknown'; error: string };
+  cutout?: { requestId: string; status: 'running' | 'succeeded' | 'failed' | 'unknown' | 'expired'; previewPath: string; applied: boolean; error: string };
 }
 export const requestId = () => `w_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
 const key = (familyId: string) => `wardrobe_batch_v02_${familyId}`;
@@ -17,7 +19,8 @@ export function resumeBatch(familyId: string): BatchEntry[] {
   if (!Array.isArray(value)) return [];
   const entries: BatchEntry[] = value.slice(0, 9).filter(e => e && typeof e.path === 'string' && typeof e.requestId === 'string' && e.form);
   if (entries.length && entries.every(entry => entry.status === 'saved')) { discardBatch(familyId, entries); return []; }
-  return entries.map(e => ({ ...e, status: e.status === 'saving' ? 'failed' : e.status, canRestart: canRestartBatch(e), error: e.status === 'saving' ? '上次保存中断，可安全重试同一请求' : e.error,
+  return entries.map(e => ({ ...e, ...(!e.submittedPatch && !e.garmentId ? { saveMode: 'combined' as const } : {}), status: e.status === 'saving' ? 'failed' : e.status, canRestart: canRestartBatch(e), error: e.status === 'saving' ? '上次保存中断，可安全重试同一请求' : e.error,
+    ...(e.cutout?.status === 'running' ? { cutout: { ...e.cutout, status: 'unknown', error: '上次去背景中断，可稍后查看结果' } } : {}),
     ...(e.recognition?.status === 'running' ? { recognition: { ...e.recognition, status: 'unknown', error: '上次识别中断，可重查原任务或手动填写' } } : {}) }));
 }
 export function discardBatch(familyId: string, entries: BatchEntry[]) {
@@ -25,15 +28,17 @@ export function discardBatch(familyId: string, entries: BatchEntry[]) {
   entries.forEach(removeBatchPhoto);
 }
 export function removeBatchPhoto(entry: BatchEntry) {
-  if (!entry.path.startsWith(`${wx.env.USER_DATA_PATH}/wardrobe-batch-`)) return;
-  try { wx.getFileSystemManager().unlinkSync(entry.path); } catch { /* Already removed by the system. */ }
+  for (const path of new Set([entry.path, entry.cutout?.previewPath || ''])) {
+    if (!path.startsWith(`${wx.env.USER_DATA_PATH}/wardrobe-batch-`)) continue;
+    try { wx.getFileSystemManager().unlinkSync(path); } catch { /* Already removed by the system. */ }
+  }
 }
 export function createBatchEntry(tempPath: string, form: GarmentForm = emptyForm): BatchEntry {
   const id = requestId();
   const extension = /\.(png|jpe?g)$/i.exec(tempPath)?.[1].toLowerCase() || 'jpg';
   const path = `${wx.env.USER_DATA_PATH}/wardrobe-batch-${id}.${extension}`;
   wx.getFileSystemManager().copyFileSync(tempPath, path);
-  return { id, path, form: { ...form }, requestId: id, garmentId: '', status: 'pending', error: '' };
+  return { id, path, form: { ...form }, requestId: id, garmentId: '', status: 'pending', error: '', saveMode: 'combined' };
 }
 export function formPatch(form: GarmentForm, memberId: string): Record<string, unknown> {
   return { name: form.name.trim(), memberId, category: categories[form.categoryIndex], color: form.color.trim(), notes: form.notes.trim() };
@@ -51,8 +56,15 @@ export async function saveBatchEntry(entry: BatchEntry, memberId: string, checkp
   entry.submittedPatch ||= formPatch(entry.form, memberId);
   entry.status = 'saving'; entry.error = ''; entry.errorCode = ''; entry.canRestart = false; checkpoint();
   try {
-    const prepared = await prepareImage(entry.path);
+    const prepared = await prepareImage(entry.cutout?.applied ? entry.cutout.previewPath : entry.path);
     if (!isActive()) return;
+    if (entry.saveMode === 'combined' && !entry.garmentId) {
+      stage = 'begin'; entry.beginUncertain = true; checkpoint();
+      const saved = await call<{ id: string }>('garments', 'save', { ...entry.submittedPatch, requestId: entry.requestId,
+        base64: prepared.base64, ...(entry.cutout?.applied ? { transparent: true } : {}) });
+      if (!isActive()) return;
+      entry.garmentId = saved.id; entry.beginUncertain = false;
+    } else {
     if (!entry.garmentId) {
       stage = 'begin'; entry.beginUncertain = true; checkpoint();
       const draft = await call<{ id: string }>('garments', 'beginUpload', { ...entry.submittedPatch, requestId: entry.requestId });
@@ -60,7 +72,8 @@ export async function saveBatchEntry(entry: BatchEntry, memberId: string, checkp
       entry.garmentId = draft.id; entry.beginUncertain = false; checkpoint();
     }
     stage = 'upload';
-    await call('garments', 'upload', { garmentId: entry.garmentId, base64: prepared.base64 });
+    await call('garments', 'upload', { garmentId: entry.garmentId, base64: prepared.base64, ...(entry.cutout?.applied ? { transparent: true } : {}) });
+    }
     if (!isActive()) return;
     entry.status = 'saved'; entry.error = ''; entry.errorCode = ''; checkpoint();
   } catch (error) {

@@ -113,6 +113,36 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
     return { invite, family, retry };
   }
 
+  async function completeUpload(draft: Garment, userId: string, base64: string, transparent: boolean) {
+    if (draft.status === 'active') return garmentView(draft);
+    let fileId = '';
+    try {
+      fileId = transparent ? await storage.uploadPng(draft.cloudPath, Buffer.from(base64, 'base64')) : await storage.upload(draft.cloudPath, base64);
+      const saved = await repo.transaction(async unit => {
+        const { garment } = await validGarment(unit, userId, draft._id, true);
+        if (garment.createdBy !== userId || garment.status !== 'uploading' || garment.uploadAttempt !== draft.uploadAttempt || garment.uploadExpiresAt <= now()) return fail('UPLOAD_INVALID', '上传状态已变化，请重新添加');
+        await validMember(unit, garment.familyId, garment.memberId);
+        const active: Garment = { ...garment, imageFileId: fileId, status: 'active', updatedAt: now(), version: garment.version + 1 };
+        await unit.put('garments', active); return active;
+      });
+      return garmentView(saved);
+    } catch (error) {
+      // Commit can succeed while its response is lost. Never delete an active image.
+      // If the state cannot be confirmed, leave the file for the cleanup worker.
+      const failedDraft = await repo.transaction(async unit => {
+        const item = await unit.get('garments', draft._id);
+        if (!item || !['uploading', 'expired', 'discarded'].includes(item.status) || item.uploadAttempt !== draft.uploadAttempt) return false;
+        // The timer may have discarded an expired draft before storage I/O
+        // returned. Track that late file again so compensation cannot lose it.
+        await unit.put('garments', { ...item, status: 'expired', cleanupGeneration: (item.cleanupGeneration || 0) + 1,
+          imageFileId: fileId, cloudPath: draft.cloudPath, uploadExpiresAt: now(), updatedAt: now() });
+        return true;
+      }).catch(() => false);
+      if (failedDraft && fileId) await storage.remove(fileId).catch(() => {});
+      throw error;
+    }
+  }
+
   return async (group: string, input: Input, identity: Identity): Promise<unknown> => {
     if (!identity.openid || identity.appid !== 'wx80f51573314b7bd2' || !['wx_client', 'wx_devtools'].includes(identity.source)) return fail('UNAUTHENTICATED', '仅支持本小程序的微信登录');
     const userId = hash(`wx/${identity.appid}/${identity.openid}`).slice(0, 40);
@@ -135,8 +165,8 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
       return { userId, ...(user.activeFamilyId ? await snapshot(userId) : { family: null, members: [], accounts: [] }) };
     }
     if (group === 'wardrobe' && action === 'home') return wardrobe(input, identity);
-    await current(repo, userId);
     if (group === 'wardrobe' || (group === 'garments' && action === 'list')) return wardrobe(input, identity);
+    if (group !== 'garments') await current(repo, userId);
     if (group === 'families') {
       if (action === 'get') return snapshot(userId);
       if (action === 'create') {
@@ -233,7 +263,10 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
       });
     }
     if (group === 'garments') {
-      if (action === 'beginUpload') return repo.transaction(async unit => {
+      if (action === 'beginUpload' || action === 'save') {
+        const combined = action === 'save', attempt = combined ? id() : '';
+        if (combined) text(input.base64, 1024 * 1024, true);
+        const draft = await repo.transaction(async unit => {
         const auth = await familyAuth(unit, userId), memberId = text(input.memberId, 80);
         await validMember(unit, auth.family._id, memberId);
         const inputFields = {
@@ -248,17 +281,22 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
         if (existing) {
           if (existing.uploadFingerprint !== uploadFingerprint) return fail('REQUEST_CONFLICT', '请求编号已用于其他衣物信息');
           if (!['uploading', 'active'].includes(existing.status) || (existing.status === 'uploading' && existing.uploadExpiresAt <= now())) return fail('UPLOAD_INVALID', '原上传已过期或已删除，请重新添加');
-          return { id: existing._id };
+          if (!combined || existing.status === 'active') return existing;
+          if (existing.createdBy !== userId || existing.uploadAttempt) return fail('UPLOAD_IN_PROGRESS', '图片仍在云端处理中，请稍后重试');
+          const claimed: Garment = { ...existing, cloudPath: input.transparent === true ? existing.cloudPath.replace(/\.(jpg|png)$/, '.png') : existing.cloudPath, uploadAttempt: attempt, updatedAt: now() };
+          await unit.put('garments', claimed); return claimed;
         }
         if (inputFields.locationId) await checkLocation(unit, auth.family._id, inputFields.locationId);
         const garment: Garment = {
           _id: garmentId, familyId: auth.family._id, ...inputFields, uploadFingerprint,
-          imageFileId: '', cloudPath: `families/${auth.family._id}/garments/${garmentId}/${id()}.jpg`,
+          imageFileId: '', cloudPath: `families/${auth.family._id}/garments/${garmentId}/${id()}.${combined && input.transparent === true ? 'png' : 'jpg'}`,
           createdBy: userId, updatedBy: userId, deletedBy: null, status: 'uploading', version: 1,
-          createdAt: timestamp, updatedAt: timestamp, deletedAt: null, uploadExpiresAt: timestamp + 3600000, uploadAttempt: '',
+          createdAt: timestamp, updatedAt: timestamp, deletedAt: null, uploadExpiresAt: timestamp + 3600000, uploadAttempt: attempt,
         };
-        await unit.put('garments', garment); return { id: garmentId };
-      });
+        await unit.put('garments', garment); return garment;
+        });
+        return combined ? completeUpload(draft, userId, text(input.base64, 1024 * 1024, true), input.transparent === true) : { id: draft._id };
+      }
       if (action === 'upload') {
         const garmentId = text(input.garmentId, 80), attempt = id();
         const base64 = text(input.base64, 1024 * 1024, true);
@@ -268,36 +306,11 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
           if (garment.status === 'active') return garment;
           if (garment.uploadExpiresAt <= now()) return fail('UPLOAD_INVALID', '上传已过期，请重新添加');
           if (garment.uploadAttempt) return fail('UPLOAD_IN_PROGRESS', '图片仍在云端处理中，请稍后重试');
-          const locked = { ...garment, uploadAttempt: attempt, updatedAt: now() };
+          const locked = { ...garment, cloudPath: input.transparent === true ? garment.cloudPath.replace(/\.(jpg|png)$/, '.png') : garment.cloudPath, uploadAttempt: attempt, updatedAt: now() };
           await unit.put('garments', locked); return locked;
         });
         if (draft.status === 'active') return garmentView(draft);
-        let fileId = '';
-        try {
-          fileId = await storage.upload(draft.cloudPath, base64);
-          const saved = await repo.transaction(async unit => {
-            const { garment } = await validGarment(unit, userId, garmentId, true);
-            if (garment.createdBy !== userId || garment.status !== 'uploading' || garment.uploadAttempt !== attempt || garment.uploadExpiresAt <= now()) return fail('UPLOAD_INVALID', '上传状态已变化，请重新添加');
-            await validMember(unit, garment.familyId, garment.memberId);
-            const active: Garment = { ...garment, imageFileId: fileId, status: 'active', updatedAt: now(), version: garment.version + 1 };
-            await unit.put('garments', active); return active;
-          });
-          return garmentView(saved);
-        } catch (error) {
-          // Commit can succeed while its response is lost. Never delete an active image.
-          // If the state cannot be confirmed, leave the file for the cleanup worker.
-          const failedDraft = await repo.transaction(async unit => {
-            const item = await unit.get('garments', garmentId);
-            if (!item || !['uploading', 'expired', 'discarded'].includes(item.status) || item.uploadAttempt !== attempt) return false;
-            // The timer may have discarded an expired draft before storage I/O
-            // returned. Track that late file again so compensation cannot lose it.
-            await unit.put('garments', { ...item, status: 'expired', cleanupGeneration: (item.cleanupGeneration || 0) + 1,
-              imageFileId: fileId, cloudPath: draft.cloudPath, uploadExpiresAt: now(), updatedAt: now() });
-            return true;
-          }).catch(() => false);
-          if (failedDraft && fileId) await storage.remove(fileId).catch(() => {});
-          throw error;
-        }
+        return completeUpload(draft, userId, base64, input.transparent === true);
       }
       if (action === 'image' || action === 'get') {
         const { garment } = await validGarment(repo, userId, text(input.garmentId, 80));

@@ -6,6 +6,7 @@ import { AiTask, AiStatus, getAiStatus, listAiTasks, getAiTask, recognizeGarment
 import { exportWardrobe } from '../../services/export';
 import { CutoutResult, getCutout, processCutout, applyCutout, saveCutoutPreview } from '../../services/cutout';
 import { recognizeEntry } from '../../services/entry-recognition';
+import { entryPhoto, previewEntryCutout } from '../../services/entry-cutout';
 
 type Screen = 'wardrobe' | 'outfits' | 'account' | 'upload' | 'detail' | 'trash' | 'locations' | 'outfitEdit' | 'picker' | 'ai';
 const toast = (title: string) => wx.showToast({ title, icon: 'none' });
@@ -19,6 +20,9 @@ interface Scope { epoch: number; familyId: string }
 interface PendingAi { kind: 'recognize' | 'recommend'; requestId: string; taskId?: string; garmentId?: string; memberId?: string; occasion?: string; season?: string; lockedGarmentIds?: string[] }
 const aiKey = (familyId: string) => `wardrobe_ai_v02_${familyId}`;
 const emptyOutfit = { id: '', version: 0, name: '', memberId: '', partial: false, occasion: '', reason: '', requestId: '' };
+const batchPhotoState = (entry?: BatchEntry) => ({ imagePath: entry ? entryPhoto(entry) : '',
+  cutoutPath: entry?.cutout?.status === 'succeeded' && !entry.cutout.applied && !entry.submittedPatch && entry.status !== 'saved' ? entry.cutout.previewPath : '',
+  cutoutRequestId: entry?.cutout?.requestId || '', cutoutVersion: 0 });
 interface HomeSnapshot extends FamilySnapshot { userId: string; garments: {items: WardrobeGarment[]; cursor: string}; locations: Location[] }
 const garmentCache = new Map<string, { familyId: string; at: number; items: ViewGarment[]; cursor: string }>();
 
@@ -31,7 +35,7 @@ Page({
     form: { ...emptyForm }, formDirty: false, categoryNames, memberNames: [] as string[],
     search: '', filterColor: '', filtersOpen: false,
     selecting: false, selectedIds: [] as string[], locations: [] as Location[], locationNames: ['未指定位置'], locationIds: [''],
-    batch: [] as BatchEntry[], batchIndex: -1, photoCount: 1, replaceBatchIndex: -1, batchProgress: '', batchPaused: false,
+    batch: [] as BatchEntry[], batchIndex: -1, photoCount: 1, replaceBatchIndex: -1, batchProgress: '',
     recognizingBatch: false, recognitionPending: false,
     outfits: [] as Outfit[], outfitCursor: '', outfitForm: { ...emptyOutfit }, outfitPicked: [] as WardrobeGarment[], outfitMemberName: '', suggestionCategory: '',
     outfitCandidates: [] as ViewGarment[], candidateCursor: '', pickerReturn: 'outfitEdit', pickedIds: [] as string[],
@@ -78,7 +82,7 @@ Page({
     this.clearCutout();
     loadGeneration++; detailGeneration++; scopeEpoch++; exportCancelled = true;
     this.setData({ replaceBatchIndex: -1, recognizingBatch: false, recognitionPending: false });
-    this.setData({ ...emptySnapshot, loading: false, saving: false, garments: [], selected: null, cursor: '', selectedMember: '', selectedMemberName: '全家', memberNames: [], imagePath: '', inviteToken: '', inviteId: '', inviteInput: '', invitePreview: '', screen: 'wardrobe', formDirty: false, form: { ...emptyForm }, search: '', filterColor: '', category: 'all', selectedIds: [], selecting: false, locations: [], locationNames: ['未指定位置'], locationIds: [''], batch: [], batchIndex: -1, batchProgress: '', batchPaused: false, outfits: [], outfitCursor: '', outfitForm: { ...emptyOutfit }, outfitMemberName: '', suggestionCategory: '', outfitPicked: [], outfitCandidates: [], candidateCursor: '', pickedIds: [], aiStatus: null, aiTask: null, aiHistory: [], aiCursor: '', aiBusy: false, pendingAi: null, recommendations: [], aiMemberIndex: 0, aiOccasion: '', aiSeason: '', lockedIds: [], lockedNames: '', lockedGarments: [], exporting: false, exportPath: '', exportCount: 0, exportBytes: 0, cutoutPath: '', cutoutRequestId: '', cutoutVersion: 0, showPrivacy: false, error: '' });
+    this.setData({ ...emptySnapshot, loading: false, saving: false, garments: [], selected: null, cursor: '', selectedMember: '', selectedMemberName: '全家', memberNames: [], imagePath: '', inviteToken: '', inviteId: '', inviteInput: '', invitePreview: '', screen: 'wardrobe', formDirty: false, form: { ...emptyForm }, search: '', filterColor: '', category: 'all', selectedIds: [], selecting: false, locations: [], locationNames: ['未指定位置'], locationIds: [''], batch: [], batchIndex: -1, batchProgress: '', outfits: [], outfitCursor: '', outfitForm: { ...emptyOutfit }, outfitMemberName: '', suggestionCategory: '', outfitPicked: [], outfitCandidates: [], candidateCursor: '', pickedIds: [], aiStatus: null, aiTask: null, aiHistory: [], aiCursor: '', aiBusy: false, pendingAi: null, recommendations: [], aiMemberIndex: 0, aiOccasion: '', aiSeason: '', lockedIds: [], lockedNames: '', lockedGarments: [], exporting: false, exportPath: '', exportCount: 0, exportBytes: 0, cutoutPath: '', cutoutRequestId: '', cutoutVersion: 0, showPrivacy: false, error: '' });
   },
   async bootstrap() {
     if (this.data.loading) return;
@@ -317,8 +321,9 @@ Page({
   },
   openUpload() {
     loadGeneration++;
+    this.clearCutout();
     const index = Math.max(0, this.data.members.findIndex((m: CloudMember) => m.id === this.data.selectedMember));
-    this.setData({ screen: 'upload', loading: false, imagePath: this.data.batch[0]?.path || '', batchIndex: this.data.batch.length ? 0 : -1, form: this.data.batch[0]?.form || { ...emptyForm, memberIndex: index }, selected: null, error: '', aiTask: null });
+    this.setData({ screen: 'upload', loading: false, ...batchPhotoState(this.data.batch[0]), batchIndex: this.data.batch.length ? 0 : -1, form: this.data.batch[0]?.form || { ...emptyForm, memberIndex: index }, selected: null, error: '', aiTask: null });
     const unrecognized = this.data.batch.filter((entry: BatchEntry) => entry.status !== 'saved' && !entry.submittedPatch && !entry.recognition).map((entry: BatchEntry) => entry.id);
     if (unrecognized.length) return this.recognizeBatchPhotos(unrecognized);
   },
@@ -364,7 +369,7 @@ Page({
         if (replacing) removeBatchPhoto(replacing);
       }
       const first = this.data.batch[firstIndex];
-      if (first) this.setData({ batchIndex: firstIndex, imagePath: first.path, form: { ...first.form }, formDirty: false });
+      if (first) this.setData({ batchIndex: firstIndex, ...batchPhotoState(first), form: { ...first.form }, formDirty: false });
     } catch (error) { if (this.active(scope) && !String((error as { errMsg?: string }).errMsg).includes('cancel')) await this.report(error); }
     finally { if (this.active(scope)) this.setData({ saving: false, replaceBatchIndex: this.data.showPrivacy ? this.data.replaceBatchIndex : -1 }); }
     if (this.active(scope) && addedIds.length) await this.recognizeBatchPhotos(addedIds);
@@ -394,7 +399,7 @@ Page({
   selectBatch(event: WechatMiniprogram.TouchEvent) {
     if (this.data.saving) return;
     const index = Number(event.currentTarget.dataset.index), item = this.data.batch[index]; if (!item) return;
-    this.setData({ batchIndex: index, form: { ...item.form }, imagePath: item.path, formDirty: false });
+    this.setData({ batchIndex: index, form: { ...item.form }, ...batchPhotoState(item), formDirty: false, error: '' });
   },
   async recognizeBatchPhotos(ids: string[]) {
     if (!this.data.family || this.data.recognizingBatch || this.data.saving) return;
@@ -438,9 +443,8 @@ Page({
     const result = await wx.showModal({ title: '结束本批录入？', content: '已保存衣物保留；未保存照片和本地重试记录将移除。' });
     if (!result.confirm || !this.active(scope)) return;
     discardBatch(scope.familyId, this.data.batch);
-    this.setData({ batch: [], batchIndex: -1, imagePath: '', form: { ...emptyForm }, batchProgress: '', recognitionPending: false });
+    this.setData({ batch: [], batchIndex: -1, ...batchPhotoState(), form: { ...emptyForm }, batchProgress: '', recognitionPending: false });
   },
-  pauseBatch() { this.setData({ batchPaused: true }); },
   async openBatchSaved() {
     const item = this.data.batch[this.data.batchIndex]; if (!item || item.status !== 'saved') return;
     const scope = this.scope();
@@ -452,12 +456,22 @@ Page({
     const form = this.data.form, memberId = this.data.members[form.memberIndex]?.id;
     if (!form.name.trim() || !memberId) { toast('请填写衣物名称并选择归属档案'); return; }
     const selected = this.data.selected, scope = this.scope(); if (!selected) return;
+    let usedExistingList = false;
     await this.mutate(async () => {
-      await call('garments', 'update', { garmentId: selected.id, version: selected.version, patch: formPatch(form, memberId) });
+      const saved = await call<WardrobeGarment>('garments', 'update', { garmentId: selected.id, version: selected.version, patch: formPatch(form, memberId) });
       if (!this.active(scope)) return;
       this.setData({ screen: 'wardrobe', selected: null, imagePath: '' }); toast('已保存到家庭衣橱');
+      if (saved?.id && this.data.listContext === this.garmentContext()) {
+        const updated = viewGarment({ ...saved, image: selected.image });
+        const search = this.data.search.trim().toLocaleLowerCase(), color = this.data.filterColor.trim();
+        const matches = (!this.data.selectedMember || updated.memberId === this.data.selectedMember)
+          && (this.data.category === 'all' || updated.category === this.data.category)
+          && (!color || updated.color === color) && (!search || `${updated.name}\n${updated.notes}`.toLocaleLowerCase().includes(search));
+        this.setData({ garments: this.data.garments.flatMap((row: ViewGarment) => row.id === saved.id ? matches ? [{ ...updated, checked: false }] : [] : [row]) });
+        this.cacheGarments(); usedExistingList = true;
+      }
     });
-    if (this.data.screen === 'wardrobe') await this.loadGarments(false);
+    if (this.data.screen === 'wardrobe' && !usedExistingList) await this.loadGarments(false);
   },
   async saveBatch() {
     if (this.data.recognizingBatch || this.data.batch.some((row: BatchEntry) => row.recognition?.status === 'running')) { toast('识别尚在处理中，请稍后重查原任务再保存'); return; }
@@ -465,7 +479,7 @@ Page({
     garmentCache.clear();
     let completed = false;
     const scope = this.scope(), entries: BatchEntry[] = this.data.batch.map((e: BatchEntry) => ({ ...e, form: { ...e.form } }));
-    this.setData({ saving: true, batchPaused: false });
+    this.setData({ saving: true });
     const checkpoint = () => {
       if (!this.active(scope)) return;
       persistBatch(scope.familyId, entries);
@@ -473,7 +487,7 @@ Page({
     };
     try {
       for (const entry of entries) {
-        if (!this.active(scope) || this.data.batchPaused) break;
+        if (!this.active(scope)) break;
         const memberId = this.data.members[entry.form.memberIndex]?.id || '';
         await saveBatchEntry(entry, memberId, checkpoint, () => this.active(scope));
       }
@@ -481,7 +495,7 @@ Page({
         if (entries.every(entry => entry.status === 'saved')) {
           discardBatch(scope.familyId, entries);
           garmentCache.clear(); loadGeneration++; detailGeneration++;
-          this.setData({ screen: 'wardrobe', batch: [], batchIndex: -1, batchProgress: '', batchPaused: false,
+          this.setData({ screen: 'wardrobe', batch: [], batchIndex: -1, batchProgress: '',
             imagePath: '', form: { ...emptyForm }, formDirty: false, selected: null, aiTask: null,
             recognizingBatch: false, recognitionPending: false, replaceBatchIndex: -1, photoCount: 1,
             garments: [], cursor: '', listContext: '', selecting: false, selectedIds: [], error: '',
@@ -489,7 +503,7 @@ Page({
             selectedMember: '', selectedMemberName: '全家' });
           completed = true; toast('已保存到家庭衣橱');
         } else {
-          checkpoint(); toast(this.data.batchPaused ? '已暂停，可继续' : '部分未保存，检查后重试');
+          checkpoint(); toast('部分未保存，检查后重试');
         }
       }
     } catch (error) { if (this.active(scope)) await this.report(error); }
@@ -856,6 +870,7 @@ Page({
   cancelExport() { exportCancelled = true; },
   shareExport() { if (this.data.exportPath && !this.data.exporting) wx.shareFileMessage({ filePath: this.data.exportPath, fileName: '家庭衣橱.zip', fail: () => toast('未分享，可稍后再试') }); },
   async cutoutSelected() {
+    if (this.data.screen === 'upload') { await this.cutoutBatchPhoto(); return; }
     const selected = this.data.selected; if (!selected || this.data.saving) return;
     const scope = this.scope(), mode = 'common' as const;
     await this.mutate(async () => {
@@ -879,9 +894,38 @@ Page({
       if (!apply(result)) this.setData({ error: result.error || (result.status === 'running' ? '正在去背景，稍后点击重查即可' : '去背景结果暂不确定，请点击重查，原图已保留') });
     });
   },
+  async cutoutBatchPhoto() {
+    const entry = this.data.batch[this.data.batchIndex];
+    if (!entry || this.data.saving || this.data.recognizingBatch || entry.submittedPatch || entry.status === 'saved') return;
+    if (entry.cutout?.applied) { toast('已替换，可直接保存'); return; }
+    const scope = this.scope();
+    if (entry.cutout && ['failed', 'expired'].includes(entry.cutout.status)) {
+      const confirm = await wx.showModal({ title: '重新生成去背景图片？', content: '将重新生成透明图片，当前照片保留。', confirmText: '重新生成' });
+      if (!confirm.confirm || !this.active(scope) || this.data.batch[this.data.batchIndex]?.id !== entry.id) return;
+      if (entry.cutout.previewPath) { try { wx.getFileSystemManager().unlinkSync(entry.cutout.previewPath); } catch { /* Expired local result. */ } }
+      delete entry.cutout;
+    }
+    await this.mutate(async () => {
+      await previewEntryCutout(entry, { active: () => this.active(scope), current: () => this.data.batch.find((row: BatchEntry) => row.id === entry.id),
+        checkpoint: () => {
+          if (!this.active(scope)) return;
+          persistBatch(scope.familyId, this.data.batch);
+          this.setData({ batch: [...this.data.batch], ...(this.data.screen === 'upload' && this.data.batch[this.data.batchIndex]?.id === entry.id ? batchPhotoState(entry) : {}) });
+        } });
+      if (this.active(scope)) toast(entry.cutout?.status === 'succeeded' ? '去背景已完成' : entry.cutout?.error || '请稍后查看结果');
+    });
+  },
   previewCutout() { if (this.data.cutoutPath) wx.previewImage({ urls: [this.data.cutoutPath] }); },
-  clearCutout() { if (this.data.cutoutPath) { try { wx.getFileSystemManager().unlinkSync(this.data.cutoutPath); } catch { /* Removed. */ } } },
+  clearCutout() { if (this.data.cutoutPath.startsWith(`${wx.env.USER_DATA_PATH}/cutout-`)) { try { wx.getFileSystemManager().unlinkSync(this.data.cutoutPath); } catch { /* Removed. */ } } },
   async replaceOriginal() {
+    if (this.data.screen === 'upload') {
+      const entry = this.data.batch[this.data.batchIndex];
+      if (!entry?.cutout || entry.cutout.status !== 'succeeded' || !entry.cutout.previewPath || entry.submittedPatch || this.data.saving) return;
+      entry.cutout.applied = true;
+      persistBatch(this.data.family!.id, this.data.batch);
+      this.setData({ batch: [...this.data.batch], ...batchPhotoState(entry) });
+      toast('已替换，保存后生效'); return;
+    }
     const selected = this.data.selected, request = this.data.cutoutRequestId, version = this.data.cutoutVersion;
     if (!selected || !request || !this.data.cutoutPath || this.data.saving) return;
     const scope = this.scope(); detailGeneration++;

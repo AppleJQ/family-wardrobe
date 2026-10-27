@@ -22,7 +22,7 @@ function orientation(segment: Buffer): number {
   return 1;
 }
 function jpegInfo(bytes: Buffer) {
-  let offset = 2, rotate = 1, width = 0, height = 0;
+  let offset = 2, rotate = 1, width = 0, height = 0, baselineRgb = false, adobe = false;
   while (offset + 4 <= bytes.length) {
     if (bytes[offset] !== 255) break;
     while (bytes[offset] === 255) offset++;
@@ -32,10 +32,37 @@ function jpegInfo(bytes: Buffer) {
     if (length < 2 || offset + length > bytes.length) throw new Error('JPEG segment');
     const segment = bytes.subarray(offset + 2, offset + length);
     if (marker === 0xe1) rotate = orientation(segment);
+    if (marker === 0xee) adobe = true;
+    if (marker === 0xc0) baselineRgb = segment[5] === 3;
     if ([0xc0, 0xc1, 0xc2].includes(marker)) { height = segment.readUInt16BE(1); width = segment.readUInt16BE(3); }
     offset += length;
   }
-  return { width, height, rotate };
+  return { width, height, rotate, canPreserve: baselineRgb && !adobe };
+}
+function stripJpegMetadata(bytes: Buffer): Buffer {
+  const chunks = [bytes.subarray(0, 2)]; let offset = 2;
+  while (offset + 2 <= bytes.length) {
+    const start = offset;
+    if (bytes[offset++] !== 255) throw new Error('JPEG marker');
+    while (bytes[offset] === 255) offset++;
+    const marker = bytes[offset++];
+    if (marker === 0xd9) { chunks.push(Buffer.from([255, 217])); return Buffer.concat(chunks); }
+    const length = bytes.readUInt16BE(offset), end = offset + length;
+    if (length < 2 || end > bytes.length) throw new Error('JPEG segment');
+    if (!(marker >= 0xe0 && marker <= 0xef) && marker !== 0xfe) chunks.push(bytes.subarray(start, end));
+    offset = end;
+    if (marker === 0xda) {
+      const scan = offset;
+      while (offset < bytes.length) {
+        if (bytes[offset] !== 255) { offset++; continue; }
+        const next = bytes[offset + 1];
+        if (next === 0 || (next >= 0xd0 && next <= 0xd7)) { offset += 2; continue; }
+        break;
+      }
+      chunks.push(bytes.subarray(scan, offset));
+    }
+  }
+  throw new Error('JPEG end');
 }
 export async function normalizeImage(base64: string): Promise<Buffer> {
   try {
@@ -45,10 +72,13 @@ export async function normalizeImage(base64: string): Promise<Buffer> {
     const isPng = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
     const isJpeg = bytes[0] === 255 && bytes[1] === 216;
     if (!isPng && !isJpeg) throw new Error('format');
-    const info = isPng ? { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20), rotate: 1 } : jpegInfo(bytes);
+    const info = isPng ? { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20), rotate: 1, canPreserve: false } : jpegInfo(bytes);
     if (!info.width || !info.height || info.width * info.height > MAX_PIXELS) throw new Error('pixels');
     if (isPng && bytes.includes(Buffer.from('acTL'))) throw new Error('animated');
     const raw = isPng ? PNG.sync.read(bytes, { checkCRC: true }) : jpeg.decode(bytes, { useTArray: true, maxResolutionInMP: 4, maxMemoryUsageInMB: 64 });
+    // Validate decoded pixels, then remove metadata without another lossy encode
+    // when an ordinary upright JPEG already fits the storage dimensions.
+    if (isJpeg && info.canPreserve && info.rotate === 1 && info.width <= 1600 && info.height <= 1600) return stripJpegMetadata(bytes);
     const swap = info.rotate >= 5, orientedW = swap ? raw.height : raw.width, orientedH = swap ? raw.width : raw.height;
     const scale = Math.min(1, 1600 / orientedW, 1600 / orientedH);
     const width = Math.max(1, Math.round(orientedW * scale)), height = Math.max(1, Math.round(orientedH * scale));

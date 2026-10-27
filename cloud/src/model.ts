@@ -4,6 +4,7 @@ export interface User extends Base {
   inviteWindow?: number; inviteAttempts?: number;
   aiDay?: string; aiCalls?: number;
   cutoutDay?: string; cutoutCalls?: number;
+  photoCutouts?: PhotoCutoutTask[];
 }
 export interface Family extends Base { name: string; ownerUserId: string; status: 'active' }
 export interface Membership extends Base {
@@ -34,6 +35,7 @@ export interface CutoutTask {
   status: 'running' | 'succeeded' | 'failed' | 'unknown'; errorCode: string; error: string;
   startedAt: number; expiresAt: number;
 }
+export interface PhotoCutoutTask extends CutoutTask { familyId: string; sourceKey: string; fingerprint: string }
 export interface Location extends Base {
   familyId: string; name: string; parentId: string; status: 'active' | 'deleted'; version: number;
   createdBy: string; updatedBy: string; childCount: number; structureFence: number;

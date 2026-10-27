@@ -8,6 +8,8 @@ export interface CutoutProvider {
   put(key: string, bytes: Buffer): Promise<void>;
   get(key: string): Promise<Buffer>;
   remove(key: string): Promise<void>;
+  putSource(key: string, bytes: Buffer): Promise<void>;
+  sourceUrl(key: string): Promise<string>;
 }
 export class CutoutError extends Error {
   constructor(public code: string, message: string, public uncertain = false) { super(message); }
@@ -51,7 +53,7 @@ export function createCiCutout(options: { bucket: string; region: string; creden
   if (!/^[a-z0-9-]+-\d+$/.test(bucket) || !/^ap-[a-z]+$/.test(region)) throw new Error('Invalid cutout bucket configuration');
   const fetcher = options.fetchImpl || fetch;
   const client = () => { const c = options.credentials(); return new COS({ SecretId: c.secretId, SecretKey: c.secretKey, SecurityToken: c.token, Timeout: 8000, AutoSwitchHost: false }); };
-  const assertKey = (key: string) => { if (!/^wardrobe-cutouts\/v1\/[a-f0-9/]+\.png$/.test(key)) throw new Error('Invalid cutout key'); };
+  const assertKey = (key: string) => { if (!/^wardrobe-cutouts\/v1\/[a-f0-9/]+\.(png|jpg)$/.test(key)) throw new Error('Invalid cutout key'); };
   return {
     configured: true,
     async process(url, mode) {
@@ -86,6 +88,8 @@ export function createCiCutout(options: { bucket: string; region: string; creden
       }
     },
     async put(key, bytes) { assertKey(key); await client().putObject({ Bucket: bucket, Region: region, Key: key, Body: bytes, ContentType: 'image/png', ACL: 'private', CacheControl: 'private, no-store' }); },
+    async putSource(key, bytes) { assertKey(key); await client().putObject({ Bucket: bucket, Region: region, Key: key, Body: bytes, ContentType: 'image/jpeg', ACL: 'private', CacheControl: 'private, no-store' }); },
+    async sourceUrl(key) { assertKey(key); return client().getObjectUrl({ Bucket: bucket, Region: region, Key: key, Sign: true, Expires: 60, Protocol: 'https:' }); },
     async get(key) { assertKey(key); try { const result = await client().getObject({ Bucket: bucket, Region: region, Key: key }); return validateCutout(Buffer.isBuffer(result.Body) ? result.Body : Buffer.from(result.Body || '', 'binary')); } catch (error) { if ((error as {code?: string})?.code === 'NoSuchKey') throw new CutoutError('CUTOUT_CACHE_MISSING', '抠图预览已过期'); throw error; } },
     async remove(key) { assertKey(key); await client().deleteObject({ Bucket: bucket, Region: region, Key: key }); },
   };
