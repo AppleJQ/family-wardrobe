@@ -2,6 +2,8 @@ export interface Base { _id: string; createdAt: number; updatedAt: number }
 export interface User extends Base {
   _openid: string; activeFamilyId: string; status: 'active' | 'blocked'; lastLoginAt: number;
   inviteWindow?: number; inviteAttempts?: number;
+  aiDay?: string; aiCalls?: number;
+  cutoutDay?: string; cutoutCalls?: number;
 }
 export interface Family extends Base { name: string; ownerUserId: string; status: 'active' }
 export interface Membership extends Base {
@@ -16,21 +18,58 @@ export type Category = 'onepiece' | 'top' | 'bottom' | 'hat';
 export type WearStatus = 'wearable' | 'laundry' | 'storage' | 'retired';
 export interface Garment extends Base {
   familyId: string; memberId: string; name: string; category: Category; wearStatus: WearStatus;
-  color: string; season: string; material: string; location: string; notes: string;
+  color: string; season: string; material: string; location: string; locationId?: string; notes: string;
   imageFileId: string; cloudPath: string; createdBy: string; updatedBy: string;
-  deletedBy: string | null; status: 'uploading' | 'active' | 'deleted' | 'expired' | 'discarded'; version: number;
+  deletedBy: string | null; status: 'uploading' | 'active' | 'deleted' | 'purging' | 'expired' | 'discarded'; version: number;
   deletedAt: number | null; uploadExpiresAt: number; uploadAttempt: string;
+  aiFence?: number;
+  uploadFingerprint?: string;
+  cleanupGeneration?: number;
+  cutouts?: Partial<Record<'goods' | 'common', CutoutTask>>;
+  retainedImagePaths?: string[];
+  appliedCutout?: { requestId: string; mode: 'goods' | 'common'; imageFileId: string };
+}
+export interface CutoutTask {
+  sourceId: string; requestId: string; attempt: string; key: string;
+  status: 'running' | 'succeeded' | 'failed' | 'unknown'; errorCode: string; error: string;
+  startedAt: number; expiresAt: number;
+}
+export interface Location extends Base {
+  familyId: string; name: string; parentId: string; status: 'active' | 'deleted'; version: number;
+  createdBy: string; updatedBy: string; childCount: number; structureFence: number;
+}
+export interface GarmentSnapshot {
+  id: string; memberId: string; name: string; category: Category; status: WearStatus;
+  color: string; season: string; material: string; location: string; locationId: string; notes: string; version: number;
+}
+export interface Outfit extends Base {
+  familyId: string; memberId: string; name: string; occasion: string; reason: string; partial: boolean;
+  garments: GarmentSnapshot[]; status: 'active' | 'deleted'; version: number;
+  createdBy: string; updatedBy: string; requestFingerprint: string;
 }
 export interface Invite extends Base {
   familyId: string; tokenHash: string; createdBy: string; expiresAt: number;
   status: 'active' | 'used' | 'revoked'; usedBy: string | null; usedAt: number | null;
 }
+export interface AiTask extends Base {
+  familyId: string; memberId: string; createdBy: string;
+  type: 'recognize' | 'recommend'; fingerprint: string;
+  status: 'running' | 'succeeded' | 'failed' | 'unknown';
+  inputVersions: Array<{ id: string; version: number }>;
+  result: unknown; errorCode: string; providerRequestId: string;
+  billingState: 'not_submitted' | 'rejected' | 'reported' | 'unknown';
+  usage: { promptTokens: number; completionTokens: number; cachedTokens: number } | null;
+}
 export interface Entities {
   users: User; families: Family; family_memberships: Membership;
-  family_members: Member; garments: Garment; family_invites: Invite;
+  family_members: Member; garments: Garment; family_invites: Invite; ai_tasks: AiTask;
+  locations: Location; outfits: Outfit;
 }
 export type Collection = keyof Entities;
-export interface ListOptions { before?: { createdAt: number; id: string }; limit?: number; expiresBefore?: number }
+export interface ListOptions {
+  before?: { createdAt: number; id: string }; limit?: number; expiresBefore?: number;
+  search?: string; excludeRetired?: boolean; deletedBefore?: number;
+}
 export interface Unit {
   get<K extends Collection>(collection: K, id: string): Promise<Entities[K] | null>;
   put<K extends Collection>(collection: K, document: Entities[K]): Promise<void>;
@@ -41,6 +80,7 @@ export interface Repository extends Unit {
 }
 export interface ImageStorage {
   upload(path: string, base64: string): Promise<string>;
+  uploadPng(path: string, bytes: Buffer): Promise<string>;
   remove(fileId: string): Promise<void>;
   urls(fileIds: string[]): Promise<Record<string, string>>;
 }

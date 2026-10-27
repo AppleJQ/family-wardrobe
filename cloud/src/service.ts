@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Category, Garment, Identity, ImageStorage, Input, Invite, Member, Membership, Repository, Unit, User, WearStatus } from './model';
+import { checkLocation, createWardrobeService } from './wardrobe-service';
 
 export class BusinessError extends Error {
   constructor(public code: string, message: string) { super(message); }
@@ -25,6 +26,7 @@ function fields(input: Input, partial = false) {
   if (!partial || input.name !== undefined) patch.name = text(input.name);
   if (!partial || input.category !== undefined) patch.category = choice<Category>(input.category, categoryValues);
   if (input.memberId !== undefined) patch.memberId = text(input.memberId, 80);
+  if (input.locationId !== undefined) patch.locationId = text(input.locationId, 80, false);
   if (input.status !== undefined) patch.wearStatus = choice<WearStatus>(input.status, ['wearable', 'laundry', 'storage', 'retired']);
   for (const key of ['color', 'season', 'material', 'location', 'notes'] as const) {
     if (input[key] !== undefined) patch[key] = text(input[key], key === 'notes' ? 500 : 100, false);
@@ -35,12 +37,13 @@ const memberView = (member: Member) => ({ id: member._id, name: member.name, ver
 function garmentView(g: Garment, image = '') {
   return {
     id: g._id, memberId: g.memberId, name: g.name, category: g.category, status: g.wearStatus,
-    color: g.color, season: g.season, material: g.material, location: g.location, notes: g.notes,
+    color: g.color, season: g.season, material: g.material, location: g.location, locationId: g.locationId || '', notes: g.notes,
     image, version: g.version, createdAt: new Date(g.createdAt).toISOString().slice(0, 10),
   };
 }
 
 export function createService(repo: Repository, storage: ImageStorage, now = Date.now) {
+  const wardrobe = createWardrobeService(repo, storage, now);
   async function current(unit: Unit, userId: string) {
     const user = await unit.get('users', userId);
     if (!user || user.status !== 'active') return fail('UNAUTHENTICATED', '请重新进入小程序');
@@ -49,8 +52,10 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
   async function familyAuth(unit: Unit, userId: string, owner = false) {
     const user = await current(unit, userId);
     if (!user.activeFamilyId) return fail('NO_FAMILY', '请先创建或加入家庭');
-    const family = await unit.get('families', user.activeFamilyId);
-    const membership = await unit.get('family_memberships', membershipId(user.activeFamilyId, userId));
+    const [family, membership] = await Promise.all([
+      unit.get('families', user.activeFamilyId),
+      unit.get('family_memberships', membershipId(user.activeFamilyId, userId)),
+    ]);
     if (!family || family.status !== 'active' || !membership || membership.status !== 'active') return fail('NO_FAMILY', '家庭权限已变化，请重新进入');
     if (owner && (membership.role !== 'owner' || family.ownerUserId !== userId)) return fail('FORBIDDEN', '仅家庭管理员可操作');
     // A write fence makes revocation conflict with in-flight mutations even under snapshot isolation.
@@ -74,8 +79,10 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
   }
   async function snapshot(userId: string) {
     const auth = await familyAuth(repo, userId);
-    const members = await repo.list('family_members', { familyId: auth.family._id, status: 'active' }, { limit: 100 });
-    const memberships = await repo.list('family_memberships', { familyId: auth.family._id, status: 'active' }, { limit: 100 });
+    const [members, memberships] = await Promise.all([
+      repo.list('family_members', { familyId: auth.family._id, status: 'active' }, { limit: 100 }),
+      repo.list('family_memberships', { familyId: auth.family._id, status: 'active' }, { limit: 100 }),
+    ]);
     await sameFamily(userId, auth.family._id);
     return {
       family: { id: auth.family._id, name: auth.family.name, role: auth.membership.role },
@@ -111,16 +118,25 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
     const userId = hash(`wx/${identity.appid}/${identity.openid}`).slice(0, 40);
     const action = input.action;
     if (group === 'bootstrapUser') {
-      await repo.transaction(async unit => {
+      let user = await repo.get('users', userId);
+      if (user && user.status !== 'active') fail('FORBIDDEN', '账号不可用');
+      // Returning accounts still get a fresh status read, without a write on
+      // every screen opening. Creation and stale login refresh remain atomic.
+      if (!user || !Number.isFinite(user.lastLoginAt) || now() - user.lastLoginAt >= 600000) user = await repo.transaction(async unit => {
         const existing = await unit.get('users', userId);
         if (existing && existing.status !== 'active') fail('FORBIDDEN', '账号不可用');
+        if (existing && Number.isFinite(existing.lastLoginAt) && now() - existing.lastLoginAt < 600000) return existing;
         const user: User = existing || { _id: userId, _openid: identity.openid, activeFamilyId: '', status: 'active', createdAt: now(), updatedAt: now(), lastLoginAt: now() };
-        await unit.put('users', { ...user, updatedAt: now(), lastLoginAt: now() });
+        const updated = { ...user, updatedAt: now(), lastLoginAt: now() };
+        await unit.put('users', updated);
+        return updated;
       });
-      const user = await current(repo, userId);
+      if (action === 'home') return wardrobe(input, identity, user);
       return { userId, ...(user.activeFamilyId ? await snapshot(userId) : { family: null, members: [], accounts: [] }) };
     }
+    if (group === 'wardrobe' && action === 'home') return wardrobe(input, identity);
     await current(repo, userId);
+    if (group === 'wardrobe' || (group === 'garments' && action === 'list')) return wardrobe(input, identity);
     if (group === 'families') {
       if (action === 'get') return snapshot(userId);
       if (action === 'create') {
@@ -220,10 +236,23 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
       if (action === 'beginUpload') return repo.transaction(async unit => {
         const auth = await familyAuth(unit, userId), memberId = text(input.memberId, 80);
         await validMember(unit, auth.family._id, memberId);
-        const garmentId = id(), timestamp = now();
+        const inputFields = {
+          memberId, name: '', category: 'top' as Category, wearStatus: 'wearable' as WearStatus,
+          color: '', season: '', material: '', location: '', locationId: '', notes: '', ...fields(input),
+        };
+        const requestId = input.requestId === undefined ? '' : text(input.requestId, 80);
+        if (requestId && !/^[A-Za-z0-9_-]{8,80}$/.test(requestId)) return fail('INVALID_INPUT', '请求编号无效');
+        const garmentId = requestId ? hash(`upload/${auth.family._id}/${userId}/${requestId}`).slice(0, 40) : id(), timestamp = now();
+        const uploadFingerprint = hash(JSON.stringify(inputFields));
+        const existing = requestId ? await unit.get('garments', garmentId) : null;
+        if (existing) {
+          if (existing.uploadFingerprint !== uploadFingerprint) return fail('REQUEST_CONFLICT', '请求编号已用于其他衣物信息');
+          if (!['uploading', 'active'].includes(existing.status) || (existing.status === 'uploading' && existing.uploadExpiresAt <= now())) return fail('UPLOAD_INVALID', '原上传已过期或已删除，请重新添加');
+          return { id: existing._id };
+        }
+        if (inputFields.locationId) await checkLocation(unit, auth.family._id, inputFields.locationId);
         const garment: Garment = {
-          _id: garmentId, familyId: auth.family._id, memberId, name: '', category: 'top', wearStatus: 'wearable',
-          color: '', season: '', material: '', location: '', notes: '', ...fields(input),
+          _id: garmentId, familyId: auth.family._id, ...inputFields, uploadFingerprint,
           imageFileId: '', cloudPath: `families/${auth.family._id}/garments/${garmentId}/${id()}.jpg`,
           createdBy: userId, updatedBy: userId, deletedBy: null, status: 'uploading', version: 1,
           createdAt: timestamp, updatedAt: timestamp, deletedAt: null, uploadExpiresAt: timestamp + 3600000, uploadAttempt: '',
@@ -259,33 +288,16 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
           // If the state cannot be confirmed, leave the file for the cleanup worker.
           const failedDraft = await repo.transaction(async unit => {
             const item = await unit.get('garments', garmentId);
-            if (item?.status !== 'uploading' || item.uploadAttempt !== attempt) return false;
-            await unit.put('garments', { ...item, imageFileId: fileId, uploadExpiresAt: now(), updatedAt: now() });
+            if (!item || !['uploading', 'expired', 'discarded'].includes(item.status) || item.uploadAttempt !== attempt) return false;
+            // The timer may have discarded an expired draft before storage I/O
+            // returned. Track that late file again so compensation cannot lose it.
+            await unit.put('garments', { ...item, status: 'expired', cleanupGeneration: (item.cleanupGeneration || 0) + 1,
+              imageFileId: fileId, cloudPath: draft.cloudPath, uploadExpiresAt: now(), updatedAt: now() });
             return true;
           }).catch(() => false);
           if (failedDraft && fileId) await storage.remove(fileId).catch(() => {});
           throw error;
         }
-      }
-      if (action === 'list') {
-        const auth = await familyAuth(repo, userId);
-        const filter: Partial<Garment> = { familyId: auth.family._id, status: 'active' };
-        if (input.memberId) { filter.memberId = text(input.memberId, 80); await validMember(repo, auth.family._id, filter.memberId); }
-        if (input.category && input.category !== 'all') filter.category = choice<Category>(input.category, categoryValues);
-        const limit = input.limit === undefined ? 20 : Number(input.limit);
-        if (!Number.isInteger(limit) || limit < 1 || limit > 50) return fail('INVALID_INPUT', '分页大小无效');
-        let before;
-        if (input.cursor) {
-          try { before = JSON.parse(Buffer.from(text(input.cursor, 300), 'base64url').toString()); } catch { return fail('INVALID_INPUT', '分页信息无效'); }
-          if (!before || !Number.isFinite(before.createdAt) || typeof before.id !== 'string' || before.id.length > 80) return fail('INVALID_INPUT', '分页信息无效');
-        }
-        const rows = await repo.list('garments', filter, { limit: limit + 1, before });
-        const page = rows.slice(0, limit);
-        await sameFamily(userId, auth.family._id);
-        const urls = await storage.urls(page.map(g => g.imageFileId));
-        await sameFamily(userId, auth.family._id);
-        const last = page[page.length - 1];
-        return { items: page.map(g => garmentView(g, urls[g.imageFileId] || '')), cursor: rows.length > limit && last ? Buffer.from(JSON.stringify({ createdAt: last.createdAt, id: last._id })).toString('base64url') : '' };
       }
       if (action === 'image' || action === 'get') {
         const { garment } = await validGarment(repo, userId, text(input.garmentId, 80));
@@ -299,6 +311,7 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
         versionCheck(garment.version, input.version);
         const patch = action === 'update' ? fields((input.patch || {}) as Input, true) : {};
         if (patch.memberId) await validMember(unit, garment.familyId, patch.memberId);
+        if (patch.locationId) await checkLocation(unit, garment.familyId, patch.locationId);
         const updated: Garment = { ...garment, ...patch, updatedBy: userId, updatedAt: now(), version: garment.version + 1,
           ...(action === 'delete' ? { status: 'deleted' as const, deletedBy: userId, deletedAt: now() } : {}) };
         await unit.put('garments', updated); return garmentView(updated);

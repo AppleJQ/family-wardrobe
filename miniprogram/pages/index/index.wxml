@@ -33,18 +33,18 @@
           <view class="chip" bindtap="showHelp">＋ 添加成员</view>
         </view>
         <view class="search-box"><image src="{{assets.wardrobe.imgSearch}}" mode="aspectFit" /><input value="{{query}}" bindinput="onSearch" placeholder="搜索衣物名称、收纳位置" placeholder-class="placeholder" /></view>
-        <view class="summary-card"><view><text class="summary-title">今天，有 26 件可穿</text><text class="tiny muted">待洗 3 · 收纳中 2 · 已淘汰 1</text></view><image src="{{assets.wardrobe.imgSlidersHorizontal}}" mode="aspectFit" /></view>
+        <view class="summary-card"><view><text class="summary-title">今天，整理了 26 件衣物</text><text class="tiny muted">一家人的衣物，一起整理</text></view><image src="{{assets.wardrobe.imgSlidersHorizontal}}" mode="aspectFit" /></view>
         <view class="chip-row categories">
           <view class="chip {{category === 'all' ? 'chip-active' : ''}}" data-category="all" bindtap="selectCategory">全部 {{member.garmentCount}}</view>
           <view class="chip {{category === 'onepiece' ? 'chip-active' : ''}}" data-category="onepiece" bindtap="selectCategory">整装</view>
+          <view class="chip {{category === 'hat' ? 'chip-active' : ''}}" data-category="hat" bindtap="selectCategory">帽子 8</view>
           <view class="chip {{category === 'top' ? 'chip-active' : ''}}" data-category="top" bindtap="selectCategory">上衣 14</view>
           <view class="chip {{category === 'bottom' ? 'chip-active' : ''}}" data-category="bottom" bindtap="selectCategory">裤子 10</view>
-          <view class="chip {{category === 'hat' ? 'chip-active' : ''}}" data-category="hat" bindtap="selectCategory">帽子 8</view>
         </view>
-        <view class="filter-row"><text>颜色⌄</text><text>季节⌄</text><text>位置⌄</text><text>状态⌄</text></view>
+        <view class="filter-row"><text>颜色⌄</text></view>
         <view class="garment-grid">
           <view wx:for="{{garments}}" wx:key="id" class="garment-card" data-id="{{item.id}}" bindtap="openGarment">
-            <view class="garment-photo"><image src="{{item.image}}" mode="aspectFit" /><text class="status-tag {{item.status}}">{{item.statusLabel}}</text></view>
+            <view class="garment-photo"><image src="{{item.image}}" mode="aspectFit" /></view>
             <text class="garment-name">{{item.name}}</text><text class="location">⌾ {{item.locationShort}}</text>
           </view>
         </view>
@@ -52,15 +52,15 @@
       </block>
 
       <block wx:if="{{screen === 'upload'}}">
-        <view class="intro"><text class="title-xl">让新衣物，找到归处</text><text class="muted">拍好交给 AI，保存前由你确认。</text></view>
+        <view class="intro"><text class="title-xl">让新衣物，找到归处</text><text class="muted">拍好交给 智能，保存前由你确认。</text></view>
         <view class="member-line"><view class="member-current"><view class="avatar">{{member.avatar}}</view><text>{{member.name}}的衣橱</text><image src="{{assets.upload.imgChevronDown}}" mode="aspectFit" /></view><text class="tiny muted">衣物 · 搭配 · 照片同步切换</text></view>
         <view class="upload-entry-row"><view class="upload-entry" bindtap="chooseMedia"><image src="{{assets.upload.imgCamera}}" mode="aspectFit" /><text>逐件拍照</text><text>一件一拍，更清晰</text></view><view class="upload-entry" bindtap="chooseMedia"><image src="{{assets.upload.imgImages}}" mode="aspectFit" /><text>相册多选</text><text>已选择 {{uploadGarments.length}} 张照片</text></view></view>
-        <view class="progress-title"><text>AI 整理完成，待确认</text><text>{{uploadIndex + 1}} / {{uploadGarments.length}} 件</text></view><view class="progress-track"><view class="progress-value" style="width: {{((uploadIndex + 1) / (uploadGarments.length || 1)) * 100}}%;"></view></view>
+        <view class="progress-title"><text>智能 整理完成，待确认</text><text>{{uploadIndex + 1}} / {{uploadGarments.length}} 件</text></view><view class="progress-track"><view class="progress-value" style="width: {{((uploadIndex + 1) / (uploadGarments.length || 1)) * 100}}%;"></view></view>
         <view class="upload-thumbs"><view wx:for="{{uploadGarments}}" wx:key="id" class="upload-thumb {{index === uploadIndex ? 'active' : ''}}" data-index="{{index}}" bindtap="changeUploadItem"><image src="{{item.image}}" mode="aspectFit" /><image class="check-icon" src="{{assets.upload.imgCircleCheck}}" mode="aspectFit" /></view></view>
         <view class="section-title"><text>确认衣物信息</text><text class="muted">当前 {{uploadIndex + 1}} / {{uploadGarments.length}} 件</text></view>
         <view wx:if="{{uploadGarments.length}}" class="preview-card"><view class="preview-label"><image src="{{assets.upload.imgSparkles}}" mode="aspectFit" />已自动去背景</view><image class="preview-image" src="{{uploadGarments[uploadIndex].image}}" mode="aspectFit" /><view class="source-pill">查看原始照片 ↗</view></view>
-        <view wx:if="{{uploadGarments.length}}" class="info-card"><view><text>名称</text><text>{{uploadGarments[uploadIndex].name}} ✎</text></view><view><text>分类</text><text>{{uploadGarments[uploadIndex].categoryLabel}} ›</text></view><view><text>颜色 / 季节</text><text>{{uploadGarments[uploadIndex].color}} · {{uploadGarments[uploadIndex].season}} ›</text></view><view><text>收纳位置</text><text>{{uploadGarments[uploadIndex].location || '待设置'}} ›</text></view><view><text>当前状态</text><text>{{uploadGarments[uploadIndex].statusLabel}} ›</text></view></view>
-        <view class="notice-card"><image src="{{assets.upload.imgCircleX}}" mode="aspectFit" /><text>AI 建议均可修改。3 张原始照片将与衣物一起保留，之后可随时查看。</text></view>
+        <view wx:if="{{uploadGarments.length}}" class="info-card"><view><text>名称</text><text>{{uploadGarments[uploadIndex].name}} ✎</text></view><view><text>分类</text><text>{{uploadGarments[uploadIndex].categoryLabel}} ›</text></view><view><text>颜色 / 季节</text><text>{{uploadGarments[uploadIndex].color}} · {{uploadGarments[uploadIndex].season}} ›</text></view><view><text>收纳位置</text><text>{{uploadGarments[uploadIndex].location || '待设置'}} ›</text></view></view>
+        <view class="notice-card"><image src="{{assets.upload.imgCircleX}}" mode="aspectFit" /><text>智能 建议均可修改。3 张原始照片将与衣物一起保留，之后可随时查看。</text></view>
         <view class="primary-button" bindtap="saveUpload"><image src="{{assets.upload.imgCheck}}" mode="aspectFit" /><text>确认并保存 {{uploadGarments.length}} 件衣物</text></view><text class="foot-note">将保存至「我」的衣橱 · 其余 2 件也可点选修改</text>
       </block>
 
@@ -70,7 +70,6 @@
         <view class="hero-photo"><view class="photo-label"><image src="{{assets.detail.imgShirt}}" mode="aspectFit" />我的衣物 · 实物图</view><image src="{{selectedGarment.image}}" mode="aspectFit" /><view class="source-pill">▧ 查看原图</view></view>
         <view class="chip-row"><view class="chip">{{selectedGarment.categoryLabel}}</view><view class="chip">{{selectedGarment.color}}</view><view class="chip">{{selectedGarment.season}}</view><view class="chip">{{selectedGarment.material}}</view></view>
         <view class="location-card"><text class="location-link">⌾ 去这里找它</text><text class="location-title">{{selectedGarment.locationShort}}</text><text class="muted">叠放区 · 与浅色上衣放在一起</text></view>
-        <view class="section-title"><text>当前状态</text><text class="link" bindtap="changeStatus">修改状态</text></view><view class="chip-row"><view wx:for="{{statusOptions}}" wx:key="value" class="chip {{selectedGarment.status === item.value ? 'chip-active' : ''}}" bindtap="changeStatus">{{item.label}}</view></view>
         <view class="info-card"><view><text>所属成员</text><text>{{member.name}} ›</text></view><view><text>添加日期</text><text>{{selectedGarment.createdAt}} ›</text></view><view><text>整理备注</text><text>{{selectedGarment.notes || '暂无备注'}} ✎</text></view></view>
         <view class="button-row"><view class="secondary-button" bindtap="editGarment">编辑衣物</view><view class="primary-button compact" bindtap="lockOutfit"><image src="{{assets.detail.imgLockKeyhole}}" mode="aspectFit" /><text>锁定这件，去搭配</text></view></view>
       </block>
@@ -89,8 +88,8 @@
         <view class="intro"><text class="title-xl">喜欢的，留到下次</text><text class="muted">收藏完整组合，下次打开不必重新挑选。</text></view>
         <view class="member-line"><view class="member-current"><view class="avatar">{{member.avatar}}</view><text>{{member.name}}的衣橱</text><image src="{{assets.favorites.imgChevronDown}}" mode="aspectFit" /></view><text class="tiny muted">衣物 · 搭配 · 照片同步切换</text></view>
         <view class="chip-row"><view class="chip chip-active">全部 {{favorites.length}}</view><view class="chip">休闲 {{favorites.length}}</view><view class="chip">通勤 0</view><view class="chip">运动 0</view></view><view class="favorite-summary"><text>「{{member.name}}」的 {{favorites.length}} 套收藏</text><text class="muted">最近收藏⌄</text></view>
-        <view wx:for="{{favorites}}" wx:key="id" class="outfit-card"><view class="outfit-heading"><text>{{item.name}}</text><text class="link" data-id="{{item.id}}" bindtap="toggleFavorite">▱ 已收藏</text></view><view class="outfit-items"><view wx:for="{{item.items}}" wx:key="id" class="outfit-item"><view class="outfit-image"><image src="{{item.image}}" mode="aspectFit" /></view><text>{{item.name}}</text><text class="link">实物与位置 ↗</text><text class="tiny muted">⟳ 只换这件</text></view></view><text class="muted">{{item.occasion}} · 收藏于 {{item.savedAt}} · 3 件均可穿</text><view class="primary-button compact" data-id="{{item.id}}" bindtap="openFitting"><image src="{{assets.favorites.imgScanFace}}" mode="aspectFit" /><text>选这套，去试衣间</text></view></view>
-        <view class="notice-card"><image src="{{assets.favorites.imgUsersRound}}" mode="aspectFit" /><text>收藏归属于当前成员。切换到「家人A」后，将展示家人A自己的搭配。</text></view><view class="secondary-wide" bindtap="navTap" data-target="outfits">✧ 回到 AI 搭配，发现新组合</view>
+        <view wx:for="{{favorites}}" wx:key="id" class="outfit-card"><view class="outfit-heading"><text>{{item.name}}</text><text class="link" data-id="{{item.id}}" bindtap="toggleFavorite">▱ 已收藏</text></view><view class="outfit-items"><view wx:for="{{item.items}}" wx:key="id" class="outfit-item"><view class="outfit-image"><image src="{{item.image}}" mode="aspectFit" /></view><text>{{item.name}}</text><text class="link">实物与位置 ↗</text><text class="tiny muted">⟳ 只换这件</text></view></view><text class="muted">{{item.occasion}} · 收藏于 {{item.savedAt}} · 3 件真实衣物</text><view class="primary-button compact" data-id="{{item.id}}" bindtap="openFitting"><image src="{{assets.favorites.imgScanFace}}" mode="aspectFit" /><text>选这套，去试衣间</text></view></view>
+        <view class="notice-card"><image src="{{assets.favorites.imgUsersRound}}" mode="aspectFit" /><text>收藏归属于当前成员。切换到「家人A」后，将展示家人A自己的搭配。</text></view><view class="secondary-wide" bindtap="navTap" data-target="outfits">✧ 回到 智能 搭配，发现新组合</view>
       </block>
 
       <block wx:if="{{screen === 'fitting'}}">
@@ -120,7 +119,7 @@
         <view class="home-card"><view class="home-avatar"><image src="{{assets.profile.imgSprout1}}" mode="aspectFit" /></view><view><text class="section-title-text">我的小家</text><text class="muted">2 位成员 · 共 56 件衣物</text></view><image class="right-icon" src="{{assets.profile.imgSettings2}}" mode="aspectFit" /></view>
         <view class="section-title"><text>家庭成员</text><text class="link" bindtap="showHelp">管理成员 ↗</text></view><view class="member-grid"><view wx:for="{{members}}" wx:key="id" class="member-card {{item.id === member.id ? 'selected' : ''}}" data-member-id="{{item.id}}" bindtap="selectMember"><view class="avatar outline">{{item.avatar}}</view><text>{{item.name}} · {{item.id === member.id ? '当前' : ''}}</text><text class="muted">{{item.garmentCount}} 件衣物</text></view></view><view class="secondary-wide" bindtap="showHelp">＋ 建立新成员档案</view><text class="tiny muted">每位成员独立管理衣物；切换后，搭配、本人照片与试穿任务也会一起切换。</text>
         <view class="section-title"><text>安心收好每一件</text></view><view class="info-card settings-list"><view><image src="{{assets.profile.imgCloudCheck}}" mode="aspectFit" /><view><text>云端保存</text><text class="tiny muted">衣物信息、原图与收藏组合</text></view><text class="muted">已同步 · 示例 ›</text></view><view><image src="{{assets.profile.imgHardDriveDownload}}" mode="aspectFit" /><view><text>备份导出</text><text class="tiny muted">为全家衣橱保留一份副本</text></view><text class="muted">›</text></view><view><image src="{{assets.profile.imgTrash2}}" mode="aspectFit" /><view><text>回收站恢复</text><text class="tiny muted">误删衣物可在这里找回</text></view><text class="muted">2 件 ›</text></view></view>
-        <view class="section-title"><text>AI 使用与费用</text></view><view class="info-card usage-card"><view class="usage-heading"><text>本月 AI 使用次数</text><text class="muted">示例数据</text></view><text class="usage-number">12 <text>次 · 查看使用记录 ↗</text></text><text class="tiny muted">整理 6 次　搭配 4 次　试穿 2 次</text><view class="divider"></view><view class="settings-entry"><image src="{{assets.profile.imgReceiptText}}" mode="aspectFit" /><view><text>费用记录</text><text class="tiny muted">暂无费用记录，不代表实际收费规则</text></view><text class="muted">›</text></view></view><view class="help-links"><text bindtap="showHelp">使用帮助</text><text bindtap="showHelp">隐私与照片管理</text></view>
+        <view class="help-links"><text bindtap="showHelp">使用帮助</text><text bindtap="showHelp">隐私与照片管理</text></view>
       </block>
     </view>
   </scroll-view>

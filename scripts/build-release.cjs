@@ -7,18 +7,35 @@ const root = path.resolve(__dirname, '..');
 const output = path.join(root, '.tmp', 'release');
 const miniRoot = path.join(output, 'miniprogram');
 if (path.dirname(output) !== path.join(root, '.tmp')) throw new Error('Invalid release output');
-fs.rmSync(output, { recursive: true, force: true });
+// DevTools may keep its project root as a working directory even after closing
+// the window. Keep that directory and replace only the generated contents.
+fs.mkdirSync(output, { recursive: true });
+for (const entry of fs.readdirSync(output)) {
+  const target = path.join(output, entry);
+  if (path.dirname(target) !== output) throw new Error('Invalid release output child');
+  fs.rmSync(target, { recursive: true, force: true });
+}
 const write = (name, content) => {
   const target = path.join(miniRoot, name);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, content);
 };
 const read = name => fs.readFileSync(path.join(root, 'miniprogram', name), 'utf8');
-for (const file of ['app.ts', 'config/cloud.ts', 'services/cloud.ts', 'pages/cloud/index.ts']) {
+const compiled = new Set();
+function compile(file) {
+  if (compiled.has(file) || file === 'config/design-assets.ts') return;
+  if (file.startsWith('../') || path.isAbsolute(file)) throw new Error('Invalid release dependency');
+  compiled.add(file);
   const source = read(file).replace(/^  openDemo\(\) \{[^\n]+\},\r?\n/m, '');
   const result = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } });
   write(file.replace(/\.ts$/, '.js'), result.outputText);
+  for (const [, specifier] of result.outputText.matchAll(/require\(["']([^"']+)["']\)/g)) {
+    if (!specifier.startsWith('.')) throw new Error(`Unexpected release runtime package: ${specifier}`);
+    compile(path.posix.normalize(path.posix.join(path.posix.dirname(file), `${specifier}.ts`)));
+  }
 }
+compile('app.ts');
+compile('pages/cloud/index.ts');
 const markup = read('pages/cloud/index.wxml').replace(/\s*<!-- development-demo:start -->[\s\S]*?<!-- development-demo:end -->/, '');
 if (/openDemo|设计演示/.test(markup)) throw new Error('Development UI remains in release');
 write('pages/cloud/index.wxml', markup);
@@ -61,5 +78,5 @@ inventory(miniRoot);
 const bytes = files.reduce((sum, file) => sum + file.bytes, 0);
 if (bytes > 2 * 1024 * 1024 || files.some(file => /\.png$|pages\/index\//.test(file.path))) throw new Error('Unexpected release package content');
 const revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
-fs.writeFileSync(path.join(output, 'release-manifest.json'), JSON.stringify({ version: '0.1.0', revision, builtAt: new Date().toISOString(), bytes, assets: keys, files }, null, 2) + '\n');
+fs.writeFileSync(path.join(output, 'release-manifest.json'), JSON.stringify({ version: '0.2.0', revision, builtAt: new Date().toISOString(), bytes, assets: keys, files }, null, 2) + '\n');
 console.log(`Release prepared: ${output}; ${files.length} files, ${bytes} bytes, ${keys.length} icons; one cloud page, no demo photos.`);

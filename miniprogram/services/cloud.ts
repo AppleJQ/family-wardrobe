@@ -10,17 +10,31 @@ export interface GarmentPage { items: CloudGarment[]; cursor: string }
 export class CloudError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
+const serviceErrorMessages: Record<string, string> = {
+  AI_BALANCE_LOW: '智能功能暂不可用，请稍后再试',
+  AI_NOT_CONFIGURED: '智能功能暂不可用，请稍后再试',
+  CUTOUT_NOT_CONFIGURED: '去背景暂不可用，请稍后再试',
+  CUTOUT_CACHE_UNAVAILABLE: '预览暂不可读取，请稍后再试',
+};
 
 export async function call<T>(name: string, action: string, data: Record<string, unknown> = {}): Promise<T> {
   if (!wx.cloud) throw new CloudError('UNAVAILABLE', '当前微信版本不支持云开发，请更新微信');
   let response;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    response = await wx.cloud.callFunction({ name, data: { ...data, action }, config: { env: CLOUD_ENV } });
-  } catch {
+    const request = wx.cloud.callFunction({ name, data: { ...data, action }, config: { env: CLOUD_ENV } });
+    response = action === 'home' ? await Promise.race([request, new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new CloudError('READ_TIMEOUT', '连接较慢，请点击重新加载再试')), 15000);
+    })]) : await request;
+  } catch (error) {
+    if (error instanceof CloudError) throw error;
     throw new CloudError('NETWORK', '暂时无法连接云端，请检查网络后重试');
-  }
+  } finally { if (timer !== undefined) clearTimeout(timer); }
   const result = response.result as { ok: boolean; data: T; error?: { code: string; message: string } } | undefined;
-  if (!result?.ok) throw new CloudError(result?.error?.code || 'INTERNAL_ERROR', result?.error?.message || '云端暂时不可用，请稍后重试');
+  if (!result?.ok) {
+    const code = result?.error?.code || 'INTERNAL_ERROR';
+    throw new CloudError(code, serviceErrorMessages[code] || result?.error?.message || '云端暂时不可用，请稍后重试');
+  }
   return result.data;
 }
 

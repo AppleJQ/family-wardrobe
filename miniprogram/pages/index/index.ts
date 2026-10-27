@@ -2,16 +2,14 @@ import { design } from '../../config/design-assets';
 import { createWardrobeStore, Garment, GarmentCategory, MemberId, Outfit } from '../../services/store';
 
 type Screen = 'wardrobe' | 'upload' | 'detail' | 'outfits' | 'favorites' | 'fitting' | 'history' | 'profile';
-type ViewGarment = Garment & { statusLabel: string; categoryLabel: string; locationShort: string };
+type ViewGarment = Garment & { categoryLabel: string; locationShort: string };
 type ViewOutfit = Outfit & { items: ViewGarment[] };
 
 const store = createWardrobeStore();
 const categoryLabels: Record<GarmentCategory, string> = { onepiece: '整装', top: '上衣', bottom: '裤子', hat: '帽子' };
-const statusLabels: Record<Garment['status'], string> = { wearable: '可穿', laundry: '待洗', storage: '收纳中', retired: '已淘汰' };
 
 const toViewGarment = (garment: Garment): ViewGarment => ({
   ...garment,
-  statusLabel: statusLabels[garment.status],
   categoryLabel: categoryLabels[garment.category],
   locationShort: garment.location.replace('／', ' · '),
 });
@@ -40,12 +38,6 @@ Page({
     uploadIndex: 0,
     showMembers: false,
     taskCreated: false,
-    statusOptions: [
-      { value: 'wearable', label: '可穿' },
-      { value: 'laundry', label: '待洗' },
-      { value: 'storage', label: '收纳中' },
-      { value: 'retired', label: '已淘汰' },
-    ] as Array<{ value: Garment['status']; label: string }>,
     assets: {
       wardrobe: design.wardrobe,
       upload: design.upload,
@@ -130,16 +122,6 @@ Page({
     });
   },
 
-  changeStatus() {
-    const garment = this.data.selectedGarment;
-    if (!garment) return;
-    wx.showActionSheet({ itemList: ['可穿', '待洗', '收纳中', '已淘汰'], success: result => {
-      const status: Garment['status'] = ['wearable', 'laundry', 'storage', 'retired'][result.tapIndex] as Garment['status'];
-      store.updateGarment(garment.id, { status }, garment.version);
-      this.refresh();
-    } });
-  },
-
   lockOutfit() {
     this.showScreen('outfits');
     toast('已带入搭配页');
@@ -202,6 +184,6 @@ Page({
   },
 
   showHelp() {
-    wx.showModal({ title: '本地演示说明', content: '当前页面使用本地示例数据，云端家庭同步、AI整理和试穿生成将在后续阶段接入。', showCancel: false });
+    wx.showModal({ title: '本地演示说明', content: '当前页面使用本地示例数据，真实家庭同步和智能整理请使用云端衣橱入口；试穿生成仍为后续功能。', showCancel: false });
   },
 });

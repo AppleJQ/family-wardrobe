@@ -45,8 +45,6 @@ page { background: #f8f7f2; }
 .garment-card { min-width: 0; }
 .garment-photo { position: relative; height: 336rpx; background: #f0ede5; border-radius: 28rpx; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .garment-photo image { width: 90%; height: 90%; }
-.status-tag { position: absolute; top: 18rpx; left: 18rpx; background: #fff; color: #456b53; border-radius: 16rpx; padding: 6rpx 12rpx; font-size: 18rpx; }
-.status-tag.laundry { color: #a8794f; }
 .garment-name { display: block; font-size: 25rpx; font-weight: 500; margin-top: 14rpx; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .location { display: block; font-size: 18rpx; color: #7b8178; margin-top: 8rpx; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .primary-button { min-height: 96rpx; border-radius: 28rpx; background: #456b53; color: #fff; display: flex; align-items: center; justify-content: center; gap: 16rpx; font-size: 28rpx; font-weight: 700; margin-top: 34rpx; }
