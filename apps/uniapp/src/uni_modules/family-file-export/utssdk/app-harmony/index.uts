@@ -1,0 +1,41 @@
+import { picker, fileIo } from '@kit.CoreFileKit';
+import { ExportDocument, ExportDocumentOptions } from '../interface.uts';
+
+let exporting = false;
+export const exportDocument: ExportDocument = function (options: ExportDocumentOptions) {
+  if (exporting) { options.fail?.({ code: 'BUSY', message: '请先完成当前导出' }); return; }
+  try {
+    const context = UTSHarmony.getUIAbilityContext();
+    const sourcePath = options.filePath.startsWith('file://') ? decodeURIComponent(options.filePath.substring(7)) : options.filePath;
+    if (!sourcePath.startsWith(context.filesDir + '/') || sourcePath.includes('/../') || sourcePath.includes('/./')
+      || !/\/wardrobe-[0-9]+\.zip$/.test(sourcePath)
+      || options.fileName.length > 128 || !/^[^/\\\u0000-\u001f]+\.zip$/i.test(options.fileName)) {
+      options.fail?.({ code: 'INVALID_SOURCE', message: '只能导出本应用生成的衣橱文件' }); return;
+    }
+    const saveOptions = new picker.DocumentSaveOptions();
+    saveOptions.newFileNames = [options.fileName];
+    const documentPicker = new picker.DocumentViewPicker(context);
+    exporting = true;
+    documentPicker.save(saveOptions).then((uris: Array<string>) => {
+      if (uris.length === 0) {
+        exporting = false; options.fail?.({ code: 'CANCELLED', message: '已取消导出' }); return;
+      }
+      let source: fileIo.File | null = null;
+      let target: fileIo.File | null = null;
+      try {
+        source = fileIo.openSync(sourcePath, fileIo.OpenMode.READ_ONLY);
+        // This URI comes only from the system picker and its temporary write grant.
+        target = fileIo.openSync(uris[0], fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.TRUNC);
+        fileIo.copyFileSync(source.fd, target.fd);
+      } finally {
+        try { if (target !== null) fileIo.closeSync(target); }
+        finally { if (source !== null) fileIo.closeSync(source); }
+      }
+      exporting = false; options.success?.();
+    }).catch(() => {
+      exporting = false; options.fail?.({ code: 'EXPORT_FAILED', message: '文件未能保存，请重新选择位置' });
+    });
+  } catch (_) {
+    exporting = false; options.fail?.({ code: 'EXPORT_FAILED', message: '无法打开文件保存窗口，请重试' });
+  }
+}

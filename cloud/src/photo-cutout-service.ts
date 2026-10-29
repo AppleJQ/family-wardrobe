@@ -1,3 +1,4 @@
+import { identityUserId } from './identity';
 import { createHash, randomUUID } from 'node:crypto';
 import { BusinessError } from './service';
 import { CutoutError, CutoutProvider } from './ci-cutout';
@@ -21,9 +22,10 @@ export function createPhotoCutoutService(repo: Repository, provider: CutoutProvi
     return user;
   }
   return async (input: Input, identity: Identity) => {
-    if (!identity.openid || identity.appid !== 'wx80f51573314b7bd2' || !['wx_client', 'wx_devtools'].includes(identity.source)) return fail('UNAUTHENTICATED', '仅支持本小程序的微信登录');
+    const verifiedUserId = identityUserId(identity);
+    if (!verifiedUserId) return fail('UNAUTHENTICATED', '请重新登录');
     if (!['getPhoto', 'processPhoto'].includes(String(input.action))) return fail('INVALID_ACTION', '暂不支持此操作');
-    const userId = hash(`wx/${identity.appid}/${identity.openid}`).slice(0, 40), user = await authorize(repo, userId), familyId = user.activeFamilyId;
+    const userId = verifiedUserId, user = await authorize(repo, userId), familyId = user.activeFamilyId;
     const requestId = typeof input.requestId === 'string' ? input.requestId : '';
     if (!/^w_[a-z0-9]+_[a-zA-Z0-9_-]{1,40}$/.test(requestId)) return fail('INVALID_INPUT', '请选择有效照片');
     const view = (task: PhotoCutoutTask) => ({ requestId, status: task.status === 'running' && now() - task.startedAt > 45000 ? 'unknown' : task.status, error: task.error, errorCode: task.errorCode, cached: true });

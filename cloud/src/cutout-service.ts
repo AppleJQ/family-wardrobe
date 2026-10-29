@@ -1,3 +1,4 @@
+import { identityUserId } from './identity';
 import { createHash, randomUUID } from 'node:crypto';
 import { BusinessError } from './service';
 import { CutoutTask, Garment, Identity, ImageStorage, Input, Repository, Unit } from './model';
@@ -24,8 +25,9 @@ export function createCutoutService(repo: Repository, provider: CutoutProvider, 
   }
   const view = (task: CutoutTask, cached = false) => ({ status: task.status === 'running' && now() - task.startedAt > 45000 ? 'unknown' : task.status, requestId: task.requestId, error: task.error, errorCode: task.errorCode, cached });
   return async (input: Input, identity: Identity) => {
-    if (!identity.openid || identity.appid !== 'wx80f51573314b7bd2' || !['wx_client', 'wx_devtools'].includes(identity.source)) return fail('UNAUTHENTICATED', '仅支持本小程序的微信登录');
-    const userId = hash(`wx/${identity.appid}/${identity.openid}`).slice(0, 40), user = await authorize(repo, userId), familyId = user.activeFamilyId;
+    const verifiedUserId = identityUserId(identity);
+    if (!verifiedUserId) return fail('UNAUTHENTICATED', '请重新登录');
+    const userId = verifiedUserId, user = await authorize(repo, userId), familyId = user.activeFamilyId;
     const mode: CutoutMode = input.mode === 'common' ? 'common' : 'goods';
     if (input.mode !== undefined && !['goods', 'common'].includes(String(input.mode))) return fail('INVALID_INPUT', '抠图方式无效');
     if (!['get', 'process', 'apply'].includes(String(input.action))) return fail('INVALID_ACTION', '暂不支持此操作');

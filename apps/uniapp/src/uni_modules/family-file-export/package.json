@@ -1,0 +1,7 @@
+{
+  "id": "family-file-export",
+  "displayName": "家庭衣橱文件导出",
+  "version": "1.0.0",
+  "description": "Save an app-private wardrobe ZIP through the Android or Harmony system document picker.",
+  "uni_modules": { "dependencies": [], "encrypt": [] }
+}

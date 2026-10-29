@@ -1,0 +1,7 @@
+{
+  "id": "family-app-update",
+  "displayName": "家庭应用安卓更新校验",
+  "version": "1.0.0",
+  "description": "Verify a private Android APK before user-confirmed installation.",
+  "uni_modules": { "dependencies": [], "encrypt": [] }
+}

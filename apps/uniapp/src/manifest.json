@@ -1,0 +1,67 @@
+{
+    "name" : "小猪猪的家",
+    "appid" : "__UNI__7872CC1",
+    "description" : "一家人的日常，放在一起。",
+    "versionName" : "0.3.4",
+    "versionCode" : 304,
+    "transformPx" : false,
+    "vueVersion" : "3",
+    "uniStatistics" : {
+        "enable" : false
+    },
+    "mp-weixin" : {
+        "appid" : "wx80f51573314b7bd2",
+        "setting" : {
+            "urlCheck" : true,
+            "es6" : true,
+            "minified" : true
+        },
+        "usingComponents" : true,
+        "__usePrivacyCheck__" : true
+    },
+    "h5" : {
+        "title" : "小猪猪的家",
+        "router" : {
+            "mode" : "hash"
+        }
+    },
+    "app-plus" : {
+        "usingComponents" : true,
+        "distribute" : {
+            "android" : {
+                "packagename" : "com.applejq.familyhome",
+                "permissions" : [
+                    "<uses-permission android:name=\"android.permission.INTERNET\"/>",
+                    "<uses-permission android:name=\"android.permission.CAMERA\"/>",
+                    "<uses-permission android:name=\"android.permission.REQUEST_INSTALL_PACKAGES\"/>"
+                ]
+            },
+            "ios" : {
+                "dSYMs" : false
+            },
+            "icons" : {
+                "android" : {
+                    "hdpi" : "C:/Users/Administrator/Desktop/小猪猪-家庭头像-v1-512.png"
+                }
+            },
+            "splashscreen" : {
+                "androidStyle" : "default",
+                "android" : {
+                    "hdpi" : "E:\\个人空间\\99_附件\\images\\MP-001\\启动图\\v1\\小猪猪的家-启动图-v1-480x762.png",
+                    "xhdpi" : "E:\\个人空间\\99_附件\\images\\MP-001\\启动图\\v1\\小猪猪的家-启动图-v1-720x1242.png",
+                    "xxhdpi" : "E:\\个人空间\\99_附件\\images\\MP-001\\启动图\\v1\\小猪猪的家-启动图-v1-1080x1882.png"
+                }
+            }
+        }
+    },
+    "app-harmony" : {
+        "bundleName" : "com.applejq.familyhome",
+        "distribute" : {
+            "bundleName" : "com.applejq.familyhome",
+            "icons" : {
+                "foreground" : "C:/Users/Administrator/Desktop/小猪猪-家庭头像-v1-512.png",
+                "background" : "C:/Users/Administrator/Desktop/小猪猪-家庭头像-v1-512.png"
+            }
+        }
+    }
+}

@@ -1,3 +1,4 @@
+import { identityUserId } from './identity';
 import { createHash } from 'node:crypto';
 import { AiCompletion, AiMessage, AiProvider, DeepSeekError } from './deepseek';
 import { AiTask, Category, Garment, Identity, Input, Repository, Unit } from './model';
@@ -104,8 +105,9 @@ export function createAiService(repo: Repository, provider: AiProvider, loadImag
     });
   }
   return async (input: Input, identity: Identity) => {
-    if (!identity.openid || identity.appid !== 'wx80f51573314b7bd2' || !['wx_client', 'wx_devtools'].includes(identity.source)) return fail('UNAUTHENTICATED', '仅支持本小程序的微信登录');
-    const userId = hash(`wx/${identity.appid}/${identity.openid}`).slice(0, 40);
+    const verifiedUserId = identityUserId(identity);
+    if (!verifiedUserId) return fail('UNAUTHENTICATED', '请重新登录');
+    const userId = verifiedUserId;
     const scope = await auth(repo, userId);
     if (input.action === 'status') {
       const day = new Date(now() + 8 * 3600000).toISOString().slice(0, 10);

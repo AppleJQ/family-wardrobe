@@ -1,0 +1,9 @@
+export type VerifyApkFailure = { message: string }
+export type VerifyApkOptions = {
+  filePath: string,
+  sha256: string,
+  size: number,
+  versionCode: number,
+  success?: (() => void) | null,
+  fail?: ((error: VerifyApkFailure) => void) | null,
+}

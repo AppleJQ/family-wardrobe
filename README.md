@@ -1,5 +1,9 @@
 # 小猪猪的家
 
+## uni-app 四端改造
+
+新增 [uni-app 工程](apps/uniapp/README.md)，使用 Vue 3 + TypeScript 共享微信小程序、H5、Android 和鸿蒙应用页面。微信账号可绑定通用登录账号，在其他端访问同一家庭和衣物；服务端仍使用现有 CloudBase 数据与权限，新增受鉴权的 HTTPS 接入。四端编译入口为 `npm run build:uni`（前端要求 Node.js >=22.12）。Android/鸿蒙安装包还需原生 SDK、DCloud AppID 和签名，资源编译不代表真机验收。下文保留原生微信工程的运行及回退说明。
+
 原生微信小程序（TypeScript / WXML / WXSS），采用微信云开发 Node.js 事件云函数、文档数据库与私有云存储。
 
 ## 家庭应用改造

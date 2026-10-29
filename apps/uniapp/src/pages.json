@@ -1,0 +1,9 @@
+{
+  "pages": [
+    { "path": "pages/home/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "小猪猪的家" } },
+    { "path": "pages/cloud/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "家庭衣橱" } },
+    { "path": "pages/login/index", "style": { "navigationBarTitleText": "登录我们的家" } },
+    { "path": "pages/privacy/index", "style": { "navigationBarTitleText": "隐私保护指引" } }
+  ],
+  "globalStyle": { "navigationBarTextStyle": "black", "navigationBarBackgroundColor": "#f8f7f2", "backgroundColor": "#f8f7f2" }
+}

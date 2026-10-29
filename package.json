@@ -8,7 +8,14 @@
     "typecheck": "tsc --noEmit",
     "build:cloud": "node scripts/build-cloud.cjs",
     "check:cloud": "tsc -p cloud/tsconfig.json --noEmit",
-    "build:release": "node scripts/build-release.cjs"
+    "build:release": "node scripts/build-release.cjs",
+    "dev:uni": "npm --prefix apps/uniapp run dev:h5",
+    "check:uni": "npm --prefix apps/uniapp run typecheck",
+    "build:uni": "node scripts/build-uniapp.cjs all",
+    "build:uni:h5": "node scripts/build-uniapp.cjs h5",
+    "build:uni:weixin": "node scripts/build-uniapp.cjs weixin",
+    "build:uni:android": "node scripts/build-uniapp.cjs android",
+    "build:uni:harmony": "node scripts/build-uniapp.cjs harmony"
   },
   "devDependencies": {
     "@types/node": "20.19.43",

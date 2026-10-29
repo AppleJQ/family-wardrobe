@@ -1,0 +1,8 @@
+export type ExportDocumentFailure = { code: string; message: string }
+export type ExportDocumentOptions = {
+  filePath: string;
+  fileName: string;
+  success?: () => void;
+  fail?: (error: ExportDocumentFailure) => void;
+}
+export type ExportDocument = (options: ExportDocumentOptions) => void

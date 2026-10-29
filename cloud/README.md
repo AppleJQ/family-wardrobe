@@ -1,6 +1,6 @@
 # 云端接口与部署
 
-仅使用已绑定小程序的文档数据库环境 `wardrobe-dev-cloude-d5bv128b6099`，旧 PG 环境不参与。函数运行时 Nodejs20.19 Event，入口 index.main，超时30秒，无 HTTP 网关。客户端使用 wx.cloud.callFunction。新增cutout事件函数接腾讯云数据万象。
+仅使用已绑定小程序的文档数据库环境 `wardrobe-dev-cloude-d5bv128b6099`，旧 PG 环境不参与。函数运行时 Nodejs20.19 Event，入口 index.main，超时30秒。原业务函数继续只接受 wx.cloud.callFunction；四端账号登录只通过新增 `multiPlatformApi` 的 HTTP 访问服务，微信账号绑定仍调用该函数的 Event 入口。新增cutout事件函数接腾讯云数据万象。
 
 运行 `npm run build:cloud`，通过微信开发者工具或 CloudBase MCP 按需部署 `.cloudbuild/` 下的函数目录，开启依赖安装。新增的 `ai` 独立部署；仅改 AI 代码时不重新部署既有六个函数。可维护源码在 cloud/src。图片处理为纯 JavaScript，无原生图片库依赖。
 
@@ -52,7 +52,7 @@ garments.status是生命周期（uploading/active/deleted/purging/expired/discar
 }
 ```
 
-业务函数还检查可信AppID、openid和小程序来源，不接收客户端身份/角色；不得添加Web/HTTP/定时入口。处理结束后清理实例内微信身份字段，防止复用残留。清理任务是独立函数。
+原业务函数仍检查可信AppID、openid和小程序来源，不接收客户端身份/角色，不得给原函数添加Web/HTTP/定时入口。共享领域服务额外接受 `multiPlatformApi` 在校验会话后创建的进程内可信身份，不接受 JSON 中的身份对象。处理结束后清理实例内微信身份字段，防止复用残留。清理任务是独立函数。新增网关部署规则见下文，不能改成全函数匿名调用。
 
 索引覆盖membership的userId+status、familyId+status；档案的familyId+status+sortOrder及列表排序；衣物familyId/memberId/category/status与createdAt/_id组合；草稿status+uploadExpiresAt；邀请tokenHash唯一及expiresAt。列表按createdAt/_id倒序游标分页。档案和登录家人列表首版最多100条。
 
@@ -160,3 +160,74 @@ V0.2页面已接入智能识别/推荐。status同时返回发起账号今日全
 - CI可能在PNG的IEND后附加数据，按完整PNG块边界截取并执行CRC验证再重编码；失败原图保留。通过官方COS SDK生成签名，CI请求不自动重试、不跟随重定向。
 
 选图录入后直接逐张自动填写名称、颜色，不再二次弹窗或要求点击启动；页面说明及既有照片隐私提示说明DeepSeek处理和用量。手工修改过的字段不再被晚到结果覆盖。照片任务以规范化图像哈希和成员作为幂等输入，换图/换成员复用旧编号会冲突；本机只保存请求编号、任务状态及编辑字段，不保存Base64。任务仍running时需等候或重查原任务后保存，失败/unknown可手工填写。录入及详情表单已去掉季节、材质、共享位置和自由文本位置，保存时省略这些键以保留旧数据。所有页面用户可见称呼统一为“智能”，内部接口名称保留。
+
+## MP-001 四端统一账号与 HTTP 网关
+
+`multiPlatformApi` 是唯一新增的 HTTP 入口。微信小程序保持原 `wx80f51573314b7bd2` AppID、可信 `wx_client/wx_devtools` 上下文和所有原业务函数；H5、Android、鸿蒙 使用同一组业务领域服务和文档数据库。微信 userId 仍为 `SHA256(wx/{appid}/{openid})` 前40位，已有家庭、成员、衣物、邀请、智能任务和每日额度不迁移。新注册账号取得独立随机 userId；用户应先在原微信账号中绑定，随后在其他端登录，才能继续看到旧家庭。
+
+HTTP 请求为 POST `Content-Type: application/json`，正文固定 `{ "group": "families", "action": "get", "data": {} }`。私有请求添加 `Authorization: Bearer <token>`；不使用 Cookie。响应正文沿用 `{ok:true,data}` 或 `{ok:false,error:{code,message}}`，HTTP 状态码可能为400、401、403、413、429、500，客户端须在非2xx时仍解析错误正文。HTTP只开放显式列出的业务组 `bootstrapUser/families/familyInvites/members/garments/wardrobe/ai/cutout` 及其已有动作，拒绝清理、任意函数或未知动作。`data` 不得携带openid/appid/source/role/identity/principal等身份字段；`userId`只在家庭管理员remove/transfer中表示目标账号，不能替换调用者身份。
+
+| group.action | 请求data | 成功data |
+| --- | --- | --- |
+| auth.register | username、password | token、expiresAt（毫秒）、userId、username |
+| auth.login | username、password | 同register |
+| auth.me | 无；HTTP需Bearer | userId、username；微信尚未绑定时username为空字符串 |
+| auth.logout | 无；HTTP需Bearer | `{success:true}`，只撤销当前会话 |
+| auth.bind | username、password；仅可信微信Event上下文 | userId、username，保留微信原userId |
+| garments.photoBase64 | garmentId；HTTP需Bearer或原微信garments函数 | `{base64,mimeType}`；私有照片服务端下载，省去浏览器跨域读取存储桶 |
+
+微信绑定调用示例：`wx.cloud.callFunction({name:'multiPlatformApi',data:{group:'auth',action:'bind',data:{username:'family_owner',password:'用户自行输入的密码'}}})`。同样的Event格式可以调用auth.me。绑定前需正常bootstrapUser初始化用户；HTTP绑定、会话身份绑定、重复绑定或绑定已占用账号均拒绝，绝不自动合并不同账号、转移家庭或覆盖密码。没有短信、付费认证、默认密码或密码重置入口。
+
+账号规范为3至32位ASCII字母/数字/点/下划线/横线，首位只能字母数字；去除账号首尾空格并转小写。密码为10至128个字符，不裁剪空格。密码使用每账号16随机字节盐、scrypt（N=32768,r=8,p=1,64字节结果）保存；验证使用恒定时间比较，未知账号也执行相同KDF。不存在账号、错误密码、停用账号及账号冲突使用相同的AUTH_FAILED消息，不返回账号是否存在。
+
+会话令牌为32个随机字节的base64url文本，默认7天有效。数据库只保存SHA-256摘要，原令牌仅成功注册/登录时返回；每次私有HTTP请求实时核对会话、撤销时间、有效期、账号和用户状态。服务端使用私有WeakMap创建领域身份，JSON复制、客户端传userId/source或伪造session对象都不能取得信任。家庭权限、成员/衣物版本、上传者检查、撤权事务围栏和智能额度仍由原领域服务执行。logout仅撤销当前令牌；客户端退出还应清除本地会话和业务缓存。
+
+持久限频集合在密码计算之前事务记录尝试，失败也保留计数，跨函数实例/重建服务有效。15分钟内同账号（登录/注册/绑定合计）最多10次；同来源IP注册最多20次、登录最多100次；全环境注册最多300次、登录最多2000次。微信绑定按可信微信userId计来源。HTTP优先读取云函数注入的 `TCB_SOURCE_IP`，兼容网关 `requestContext.sourceIp`，不信任客户端X-Forwarded-For；无法识别IP时所有未知来源共用保守限额。可在网关另配环境QPS限制；不要把共享限额当作逐IP识别已获真机验证。
+
+照片导出只接受garmentId；服务器自行解析私有fileID并通过CloudBase SDK下载，不接收URL/fileID。下载前后检查家庭权限和active生命周期，换图时拒绝迟到响应，只返回JPEG或PNG，原始字节上限2 MiB。`mimeType`为image/jpeg或image/png。已签发URL仍遵守原300秒有效期。
+
+### 新增集合、索引与权限
+
+先创建 `auth_accounts`、`auth_sessions`、`auth_throttles` 三个文档集合，全部使用与其他服务端集合相同的拒绝客户端读写规则：
+
+```json
+{"read":false,"write":false,"create":false,"update":false,"delete":false}
+```
+
+- `auth_accounts`：`_id`为规范账号名SHA-256派生值，内置_id唯一索引负责并发账号唯一性；另建`userId`唯一升序索引作一人一账号的额外约束。user文档增加可选username；绑定时同一事务写user和account，保留原_openid及所有业务字段。
+- `auth_sessions`：`_id`和tokenHash均为令牌SHA-256，不含明文令牌。增加`userId ASC, createdAt DESC`及`expiresAt ASC`普通索引，便于运维审计及清理。expiresAt为毫秒数，鉴权显式检查到期，不能依赖后台删除及时性。
+- `auth_throttles`：`_id`为限频键摘要，不存原IP/明文账号，增加`expiresAt ASC`普通索引供运维清理。过期桶下次尝试会原地重置。不要把毫秒数字直接配置成要求Date类型的TTL索引。
+
+会话和限频记录可由受控服务端维护流程清理；本次不开放客户端清理动作，不修改原衣物补偿任务。过期/撤销会话即使尚未物理删除也不能登录。
+
+### 构建与部署顺序
+
+1. 运行 `npm run check:cloud` 和 `npm run build:cloud`。构建得到10个独立函数包；新增 `.cloudbuild/multiPlatformApi` 包含所有业务服务、身份模块、私有认证和网关，以及微信SDK、图片处理和COS依赖。其他9个包都包含各自领域服务需要的identity.js，原入口不变。
+2. 建立上述集合/索引/拒绝规则。部署 `multiPlatformApi` 为Nodejs20.19 Event、index.main、30秒，建议512 MiB内存（scrypt并发需要内存）。保留原微信函数，无需为其开HTTP。需要photoBase64的原微信garments函数及共享身份改动的包按此次生成物更新；只部署新增网关不能更新旧函数里的新增动作。
+3. 为 `multiPlatformApi` 单独配置HTTPS访问服务路由，使用标准HTTP事件体和集成响应，不做任意函数转发。网关允许未携带CloudBase SDK登录态的HTTP请求到达此函数，由应用的Bearer会话鉴权。原9个函数继续沿用原调用规则，cleanupUploads保持禁止客户端调用。不要全局把`*`函数规则改为匿名允许。
+4. `multiPlatformApi`服务端配置 `CLOUD_API_ALLOWED_ORIGINS` 为逗号分隔的**完整精确Origin**，例如 `https://wardrobe.example.com,http://localhost:5173`，禁止`*`、路径、尾部斜线、通配子域或null。未配置时所有带Origin的浏览器请求拒绝；原生端无Origin仍可使用Bearer会话。只对匹配来源回复CORS头，不启用Access-Control-Allow-Credentials。OPTIONS仅允许POST和Content-Type/Authorization。
+5. 在新增网关函数配置与原ai函数一致的 `DEEPSEEK_API_KEY`、`AI_DAILY_LIMIT`；去背景复用原私有桶和执行角色临时凭据，不创建长期密钥。给网关执行角色同等数据库、CloudBase存储和CI最小权限。不要把这些环境变量写入前端、文档或日志。
+6. H5构建填写网关HTTPS地址；Android/鸿蒙构建使用同地址。微信保持原合法域名/小程序环境绑定。此源码和本地构建不创建路由、集合、规则或线上配置。
+
+HTTP事件/集成响应遵循 [CloudBase HTTP访问云函数](https://docs.cloudbase.net/service/access-cloud-function) 和 [函数输出](https://docs.cloudbase.net/cbrf/how-to-writing-functions-code)；可信IP说明参考 [Node端getClientIP](https://docs.cloudbase.net/api-reference/webv3-pg/authentication) 与 [网关源IP规则](https://docs.cloudbase.net/service/custom-domain)。线上路由、真实CORS、双微信账号、真机安装与付费供应商调用须分别验收；本地内存仓储测试不替代云端事务和权限验收。
+
+### Android APK 版本发布
+
+`multiPlatformApi` 新增唯一的匿名只读检查操作：
+
+```json
+{"group":"updates","action":"check","data":{"platform":"android","versionCode":301}}
+```
+
+只接受android和正整数原生APK版本号，不允许客户端修改版本信息。业务组继续使用Bearer鉴权；微信Event入口依旧只允许auth.bind/me。版本元数据由服务端环境变量 `ANDROID_UPDATE_RELEASE` 控制，不放数据库写入口。未设置/清空返回 `{ "ok": true, "data": { "release": null } }`，无已发布更新。错误配置返回明确错误，不诱导安装。
+
+发布新版本：
+
+1. 提高manifest的versionName/versionCode，用与已安装旧包相同的证书生成完整签名APK；0.3.1/301是首次包含更新能力的源码版本，仍需先手动安装一次。
+2. 将已核验APK上传到由维护者管理的长期HTTPS下载位置，使用不可变文件名；避免过期下载签名、账号登录页、覆盖旧版本文件。不改变家庭照片等私有存储规则。
+3. 在仓库根目录运行 `node scripts/prepare-android-update.cjs --apk <实际APK绝对路径> --url <HTTPS下载地址> --notes <UTF8说明文件>`。脚本从实际APK二进制manifest读取包名和版本，计算字节数与SHA256，输出 `.tmp/app-releases/android-<versionCode>.json`，不上传、不发布。
+4. 核对签名与旧版一致、下载所得文件哈希与JSON一致、已通过真机测试；将JSON全文配置到multiPlatformApi环境变量 `ANDROID_UPDATE_RELEASE`。只更新此变量，保留已有CORS、模型等变量；客户端下次冷启动/手动检查即可发现新版。清空此变量可撤回后续检查的推荐，已下载包仍可在离线时由用户选择安装。
+
+契约为platform、packageName、versionCode、versionName、url、sha256、size、notes。包名固定com.applejq.familyhome；URL只接受HTTPS APK、无凭据/片段；SHA256为64位小写十六进制；APK最大256MiB、说明最多1200字符、JSON最多4096字节。客户端同样校验契约，只向高于当前原生APK版本号更新。
+
+2026-10-28开发网关代码已更新，真实匿名检查返回200/release:null，匿名家庭读取仍401；尚未设置发布元数据、上传APK或发布更新。用户要求先完成代码，APK打包已由用户取消，Android原生Kotlin编译和真机安装仍待后续。

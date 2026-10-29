@@ -67,6 +67,10 @@ export function createRepository(): Repository {
 export function createStorage(timings?: RequestTimings): ImageStorage {
   const time = <T>(name: string, work: () => Promise<T>) => timings ? timings.time(name, work) : work();
   return {
+    async download(fileID) {
+      const result = await time('storage.download', () => cloud.downloadFile({ fileID }));
+      return result.fileContent;
+    },
     async upload(path, base64) {
       const fileContent = await time('image.normalize', async () => (await import('./image')).normalizeImage(base64));
       const result = await time('storage.upload', () => cloud.uploadFile({ cloudPath: path, fileContent }));

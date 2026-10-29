@@ -1,3 +1,4 @@
+import { identityUserId } from './identity';
 import { createHash, randomBytes } from 'node:crypto';
 import { Category, Garment, Identity, ImageStorage, Input, Invite, Member, Membership, Repository, Unit, User, WearStatus } from './model';
 import { checkLocation, createWardrobeService } from './wardrobe-service';
@@ -144,8 +145,9 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
   }
 
   return async (group: string, input: Input, identity: Identity): Promise<unknown> => {
-    if (!identity.openid || identity.appid !== 'wx80f51573314b7bd2' || !['wx_client', 'wx_devtools'].includes(identity.source)) return fail('UNAUTHENTICATED', '仅支持本小程序的微信登录');
-    const userId = hash(`wx/${identity.appid}/${identity.openid}`).slice(0, 40);
+    const verifiedUserId = identityUserId(identity);
+    if (!verifiedUserId) return fail('UNAUTHENTICATED', '请重新登录');
+    const userId = verifiedUserId;
     const action = input.action;
     if (group === 'bootstrapUser') {
       let user = await repo.get('users', userId);
@@ -311,6 +313,18 @@ export function createService(repo: Repository, storage: ImageStorage, now = Dat
         });
         if (draft.status === 'active') return garmentView(draft);
         return completeUpload(draft, userId, base64, input.transparent === true);
+      }
+      if (action === 'photoBase64') {
+        const { garment } = await validGarment(repo, userId, text(input.garmentId, 80));
+        if (!storage.download) return fail('INTERNAL_ERROR', '照片暂不可读取，请稍后重试');
+        const bytes = await storage.download(garment.imageFileId);
+        if (bytes.length > 2 * 1024 * 1024) return fail('PAYLOAD_TOO_LARGE', '照片过大，暂不能导出');
+        const png = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+        const jpeg = bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+        if (!png && !jpeg) return fail('INVALID_IMAGE', '照片格式无效');
+        const fresh = await validGarment(repo, userId, garment._id);
+        if (fresh.garment.imageFileId !== garment.imageFileId) return fail('CONFLICT', '照片已变化，请重新读取');
+        return { base64: bytes.toString('base64'), mimeType: png ? 'image/png' : 'image/jpeg' };
       }
       if (action === 'image' || action === 'get') {
         const { garment } = await validGarment(repo, userId, text(input.garmentId, 80));

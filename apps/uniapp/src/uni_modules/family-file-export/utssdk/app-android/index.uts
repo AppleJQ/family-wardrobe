@@ -1,0 +1,47 @@
+import Activity from 'android.app.Activity';
+import Intent from 'android.content.Intent';
+import { DocumentCopy } from 'uts.sdk.modules.familyFileExport';
+import { ExportDocument, ExportDocumentOptions } from '../interface.uts';
+
+const REQUEST_CODE: Int = 28473;
+let exporting = false;
+export const exportDocument: ExportDocument = function (options: ExportDocumentOptions) {
+  if (exporting) { options.fail?.({ code: 'BUSY', message: '请先完成当前导出' }); return; }
+  const activity = UTSAndroid.getUniActivity();
+  if (activity === null) { options.fail?.({ code: 'EXPORT_FAILED', message: '请返回应用后重试导出' }); return; }
+  try {
+    if (!DocumentCopy.isPrivateArchive(options.filePath, activity)
+      || options.fileName.length > 128 || !/^[^/\\\u0000-\u001f]+\.zip$/i.test(options.fileName)) {
+      options.fail?.({ code: 'INVALID_SOURCE', message: '只能导出本应用生成的衣橱文件' }); return;
+    }
+  } catch (_) { options.fail?.({ code: 'INVALID_SOURCE', message: '导出文件已失效，请重新生成' }); return; }
+  let onResult: ((requestCode: Int, resultCode: Int, data: Intent | null) => void) | null = null;
+  onResult = (requestCode: Int, resultCode: Int, data: Intent | null): void => {
+    if (requestCode !== REQUEST_CODE) return;
+    UTSAndroid.offAppActivityResult(onResult!);
+    if (resultCode === Activity.RESULT_CANCELED) {
+      exporting = false; options.fail?.({ code: 'CANCELLED', message: '已取消导出' }); return;
+    }
+    if (resultCode !== Activity.RESULT_OK || data === null || data.getData() === null) {
+      exporting = false; options.fail?.({ code: 'EXPORT_FAILED', message: '未取得文件保存位置' }); return;
+    }
+    try {
+      DocumentCopy.copyArchive(options.filePath, data.getData()!, activity);
+      exporting = false; options.success?.();
+    } catch (_) {
+      exporting = false; options.fail?.({ code: 'EXPORT_FAILED', message: '文件未能保存，请重新选择位置' });
+    }
+  };
+  try {
+    const intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+    intent.addCategory(Intent.CATEGORY_OPENABLE);
+    intent.setType('application/zip');
+    intent.putExtra(Intent.EXTRA_TITLE, options.fileName);
+    exporting = true;
+    UTSAndroid.onAppActivityResult(onResult!);
+    activity.startActivityForResult(intent, REQUEST_CODE);
+  } catch (_) {
+    UTSAndroid.offAppActivityResult(onResult!); exporting = false;
+    options.fail?.({ code: 'EXPORT_FAILED', message: '无法打开文件保存窗口，请重试' });
+  }
+}

@@ -1,3 +1,4 @@
+import { identityUserId } from './identity';
 import { createHash, randomBytes } from 'node:crypto';
 import { Category, Collection, Entities, Garment, GarmentSnapshot, Identity, ImageStorage, Input, ListOptions, Location, Outfit, Repository, Unit, User, WearStatus } from './model';
 import { BusinessError } from './service';
@@ -330,8 +331,9 @@ export function createWardrobeService(repo: Repository, storage: ImageStorage, n
     return saved ? outfitView(userId, saved) : { success: true };
   }
   return async (input: Input, identity: Identity, knownUser?: User): Promise<unknown> => {
-    if (!identity.openid || identity.appid !== 'wx80f51573314b7bd2' || !['wx_client', 'wx_devtools'].includes(identity.source)) return fail('UNAUTHENTICATED', '仅支持本小程序的微信登录');
-    const userId = hash(`wx/${identity.appid}/${identity.openid}`).slice(0, 40);
+    const verifiedUserId = identityUserId(identity);
+    if (!verifiedUserId) return fail('UNAUTHENTICATED', '请重新登录');
+    const userId = verifiedUserId;
     if (input.action === 'home') return home(userId, input, knownUser);
     if (input.action === 'list') return garmentPage(userId, input);
     if (input.action === 'trash') return garmentPage(userId, input, true);

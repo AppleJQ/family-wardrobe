@@ -1,11 +1,21 @@
 export interface Base { _id: string; createdAt: number; updatedAt: number }
 export interface User extends Base {
   _openid: string; activeFamilyId: string; status: 'active' | 'blocked'; lastLoginAt: number;
+  username?: string;
   inviteWindow?: number; inviteAttempts?: number;
   aiDay?: string; aiCalls?: number;
   cutoutDay?: string; cutoutCalls?: number;
   photoCutouts?: PhotoCutoutTask[];
 }
+// Server-only credentials/session records. Never expose these collections to clients.
+export interface AuthAccount extends Base {
+  username: string; userId: string; algorithm: 'scrypt-v1'; salt: string; passwordHash: string;
+  status: 'active' | 'disabled';
+}
+export interface AuthSession extends Base {
+  tokenHash: string; userId: string; accountId: string; expiresAt: number; revokedAt: number | null;
+}
+export interface AuthThrottle extends Base { windowStart: number; attempts: number; expiresAt: number }
 export interface Family extends Base { name: string; ownerUserId: string; status: 'active' }
 export interface Membership extends Base {
   familyId: string; userId: string; role: 'owner' | 'member'; status: 'active' | 'left' | 'removed';
@@ -66,6 +76,7 @@ export interface Entities {
   users: User; families: Family; family_memberships: Membership;
   family_members: Member; garments: Garment; family_invites: Invite; ai_tasks: AiTask;
   locations: Location; outfits: Outfit;
+  auth_accounts: AuthAccount; auth_sessions: AuthSession; auth_throttles: AuthThrottle;
 }
 export type Collection = keyof Entities;
 export interface ListOptions {
@@ -81,6 +92,7 @@ export interface Repository extends Unit {
   list<K extends Collection>(collection: K, filter: Partial<Entities[K]>, options?: ListOptions): Promise<Entities[K][]>;
 }
 export interface ImageStorage {
+  download?(fileId: string): Promise<Buffer>;
   upload(path: string, base64: string): Promise<string>;
   uploadPng(path: string, bytes: Buffer): Promise<string>;
   remove(fileId: string): Promise<void>;

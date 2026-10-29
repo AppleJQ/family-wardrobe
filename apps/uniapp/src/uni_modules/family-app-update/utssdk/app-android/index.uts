@@ -1,0 +1,18 @@
+import { ApkVerifier } from 'uts.sdk.modules.familyAppUpdate';
+import { VerifyApkOptions } from '../interface.uts';
+
+export function verifyApk(options: VerifyApkOptions) {
+  const activity = UTSAndroid.getUniActivity();
+  if (activity === null) { options.fail?.({ message: '请返回应用后重试' }); return; }
+  ApkVerifier.verify(activity, options.filePath, options.sha256, options.size, options.versionCode,
+    () => { options.success?.(); },
+    (message: string) => { options.fail?.({ message }); });
+}
+export function canInstallPackages(): boolean {
+  const activity = UTSAndroid.getUniActivity();
+  return activity !== null && ApkVerifier.canInstallPackages(activity);
+}
+export function openInstallSettings(): void {
+  const activity = UTSAndroid.getUniActivity();
+  if (activity !== null) ApkVerifier.openInstallSettings(activity);
+}
