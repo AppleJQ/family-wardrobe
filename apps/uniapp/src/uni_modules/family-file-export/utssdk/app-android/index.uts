@@ -1,7 +1,28 @@
 import Activity from 'android.app.Activity';
 import Intent from 'android.content.Intent';
-import { DocumentCopy } from 'uts.sdk.modules.familyFileExport';
-import { ExportDocument, ExportDocumentOptions } from '../interface.uts';
+import { DocumentCopy, LocalFileReader, LocalFileWriter } from 'uts.sdk.modules.familyFileExport';
+import { ExportDocument, ExportDocumentOptions, ReadLocalBase64, ReadLocalBase64Options, WriteLocalBase64, WriteLocalBase64Options } from '../interface.uts';
+
+export const readLocalBase64: ReadLocalBase64 = function (options: ReadLocalBase64Options) {
+  const context = UTSAndroid.getAppContext();
+  if (context === null) {
+    options.fail({ code: 'READ_FAILED', message: '无法读取所选照片，请返回应用后重试' }); return;
+  }
+  try {
+    options.success(LocalFileReader.readBase64(options.filePath, context));
+  } catch (_) {
+    options.fail({ code: 'READ_FAILED', message: '无法读取所选照片，请重新选择后重试' });
+  }
+}
+
+export const writeLocalBase64: WriteLocalBase64 = function (options: WriteLocalBase64Options) {
+  try {
+    LocalFileWriter.writeBase64(options.filePath, options.base64);
+  } catch (_) {
+    options.fail({ code: 'WRITE_FAILED', message: '无法保存本机文件，请检查手机存储空间后重试' }); return;
+  }
+  options.success();
+}
 
 const REQUEST_CODE: Int = 28473;
 let exporting = false;

@@ -1,5 +1,5 @@
 import { getAiTask, recognizePhoto } from './ai';
-import { prepareImage } from './cloud';
+import { prepareProcessingImage } from './cloud';
 import { BatchEntry, requestId } from './batch';
 
 interface RecognitionHooks { current: () => BatchEntry | undefined; active: () => boolean; checkpoint: () => void }
@@ -18,7 +18,7 @@ export async function recognizeEntry(entry: BatchEntry, memberId: string, hooks:
     let task;
     if (request.taskId) task = await getAiTask(request.taskId);
     else {
-      const prepared = await prepareImage(path);
+      const prepared = await prepareProcessingImage(path);
       if (!current()) return;
       task = await recognizePhoto(request.memberId, request.requestId, prepared.base64);
     }
@@ -39,7 +39,10 @@ export async function recognizeEntry(entry: BatchEntry, memberId: string, hooks:
     const row = current(); if (!row) return;
     const code = (error as { code?: string } | null)?.code;
     const unknown = ['NETWORK', 'AI_SUBMISSION_UNKNOWN', 'AI_UNAVAILABLE'].includes(code || '') || !code;
-    row.recognition = { ...request, status: unknown ? 'unknown' : 'failed', error: unknown
+    const tooLarge = ['PAYLOAD_TOO_LARGE', 'IMAGE_TOO_LARGE'].includes(code || '');
+    row.recognition = { ...request, status: unknown ? 'unknown' : 'failed', error: tooLarge
+      ? '照片较大，暂时无法识别，请换一张较小的照片'
+      : unknown
       ? '识别结果暂未返回，可稍后查看或手动填写'
       : '自动识别未成功，可手动填写名称、颜色' };
     hooks.checkpoint();

@@ -1,3 +1,4 @@
+import type { NotebookRecord, NotebookAsset, NotebookAiRequest, NotebookReminderSubscription, NotebookReminderDelivery, NotebookReminderScan, NotebookCleanupScan } from './notebook-model';
 export interface Base { _id: string; createdAt: number; updatedAt: number }
 export interface User extends Base {
   _openid: string; activeFamilyId: string; status: 'active' | 'blocked'; lastLoginAt: number;
@@ -5,6 +6,7 @@ export interface User extends Base {
   inviteWindow?: number; inviteAttempts?: number;
   aiDay?: string; aiCalls?: number;
   cutoutDay?: string; cutoutCalls?: number;
+  notebookAiDay?: string; notebookAiCalls?: number; notebookFence?: number;
   photoCutouts?: PhotoCutoutTask[];
 }
 // Server-only credentials/session records. Never expose these collections to clients.
@@ -77,6 +79,10 @@ export interface Entities {
   family_members: Member; garments: Garment; family_invites: Invite; ai_tasks: AiTask;
   locations: Location; outfits: Outfit;
   auth_accounts: AuthAccount; auth_sessions: AuthSession; auth_throttles: AuthThrottle;
+  notebook_entries: NotebookRecord; notebook_assets: NotebookAsset; notebook_ai_requests: NotebookAiRequest;
+  notebook_reminder_subscriptions: NotebookReminderSubscription; notebook_reminder_deliveries: NotebookReminderDelivery;
+  notebook_reminder_scans: NotebookReminderScan;
+  notebook_cleanup_scans: NotebookCleanupScan;
 }
 export type Collection = keyof Entities;
 export interface ListOptions {

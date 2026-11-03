@@ -1,6 +1,9 @@
 // #ifdef APP-PLUS || APP-HARMONY
 import { exportDocument } from '@/uni_modules/family-file-export';
 // #endif
+// #ifdef APP-PLUS
+import { readLocalBase64, writeLocalBase64 } from '@/uni_modules/family-file-export';
+// #endif
 /** Private photos use IndexedDB on Web and app-private files on phones. */
 const browserUrls = new Map<string, string>();
 let database: Promise<IDBDatabase> | undefined;
@@ -58,20 +61,10 @@ export async function readBase64(path: string): Promise<string> {
   // #endif
   // #ifdef APP-PLUS
   return new Promise((resolve, reject) => {
-    const fail = () => reject(new Error('无法读取所选照片，请重新选择后重试'));
-    plus.io.resolveLocalFileSystemURL(path, entry => (entry as unknown as PlusIoFileEntry).file(file => {
-      const reader = new plus.io.FileReader();
-      reader.onloadend = event => {
-        const target = event.target as unknown as { result?: string } | undefined;
-        const result = target?.result ?? reader.result;
-        if (reader.error || typeof result !== 'string' || !/^data:[^,]*;base64,/i.test(result)) { fail(); return; }
-        const base64 = result.slice(result.indexOf(',') + 1);
-        if (!base64) { fail(); return; }
-        resolve(base64);
-      };
-      reader.onerror = fail; reader.onabort = fail;
-      reader.readAsDataURL(file);
-    }, fail), fail);
+    // Keep system photo-picker URIs intact; they are not filesystem paths.
+    const filePath = /^(content|file):\/\//i.test(path) ? path : plus.io.convertLocalFileSystemURL(path);
+    readLocalBase64({ filePath, success: resolve,
+      fail: error => reject(Object.assign(new Error(error.message), { code: error.code })) });
   });
   // #endif
   throw new Error('无法读取照片');
@@ -92,20 +85,11 @@ export async function writeBase64(path: string, base64: string): Promise<void> {
   await new Promise<void>((resolve,reject)=>uni.getFileSystemManager().writeFile({filePath:path,data:base64,encoding:'base64',success:()=>resolve(),fail:reject})); return;
   // #endif
   // #ifdef APP-PLUS
-  // Android native bridge writes binary; FileWriter.write would corrupt image/ZIP bytes as text.
-  try {
-    const File = plus.android.importClass('java.io.File') as any;
-    const FileOutputStream = plus.android.importClass('java.io.FileOutputStream') as any;
-    const Base64 = plus.android.importClass('android.util.Base64') as any;
-    const file = new File(plus.io.convertLocalFileSystemURL(path));
-    const parent = file.getParentFile();
-    // Returned Java objects are handles; call their methods through the native bridge.
-    if (!parent || (!plus.android.invoke(parent, 'exists') && !plus.android.invoke(parent, 'mkdirs') && !plus.android.invoke(parent, 'exists'))) {
-      throw new Error('Private file directory is unavailable');
-    }
-    const output = new FileOutputStream(file);
-    try { output.write(Base64.decode(base64,0)); } finally { output.close(); }
-  } catch { throw new Error('无法保存本机文件，请检查手机存储空间后重试'); }
+  // Decode and write entirely in Java; byte[] never crosses Native.js.
+  await new Promise<void>((resolve, reject) => writeLocalBase64({
+    filePath: plus.io.convertLocalFileSystemURL(path), base64, success: resolve,
+    fail: error => reject(Object.assign(new Error(error.message), { code: error.code })),
+  }));
   return;
   // #endif
   throw new Error('无法保存文件');

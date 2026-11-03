@@ -10,6 +10,8 @@ import { createCutoutService } from './cutout-service';
 import { createPhotoCutoutService } from './photo-cutout-service';
 import { Input } from './model';
 import { checkAndroidUpdate } from './app-update';
+import { createNotebookService } from './notebook-service';
+import { readNotebookWechatConfig } from './notebook-reminders';
 
 cloud.init({ env: 'wardrobe-dev-cloude-d5bv128b6099' });
 const repo = createRepository(), storage = createStorage(), business = createService(repo, storage);
@@ -23,6 +25,11 @@ const cutout = createCutoutService(repo, provider, async fileId => {
   const urls = await storage.urls([fileId]); if (!urls[fileId]) throw new Error('IMAGE_UNAVAILABLE'); return urls[fileId];
 }, { storage });
 const photoCutout = createPhotoCutoutService(repo, provider);
+const notebook = createNotebookService(repo, storage, {
+  provider: createDeepSeekClient({ apiKey: process.env.DEEPSEEK_API_KEY }),
+  dailyLimit: Number(process.env.NOTEBOOK_AI_DAILY_LIMIT || 30),
+  wechatReminders: readNotebookWechatConfig(process.env),
+});
 const gateway = createGateway({
   updates: data => checkAndroidUpdate(data, process.env.ANDROID_UPDATE_RELEASE || ''),
   auth: createAuthService(repo), allowedOrigins: configuredOrigins(process.env.CLOUD_API_ALLOWED_ORIGINS || ''),
@@ -32,6 +39,7 @@ const gateway = createGateway({
     return { openid: context.OPENID || '', appid: context.APPID || '', source: context.SOURCE || '' };
   },
   dispatch: (group, input, identity) => {
+    if (group === 'notebook') return notebook.handle(input, identity);
     if (group === 'ai') return ai(input, identity);
     if (group === 'cutout') return (['getPhoto', 'processPhoto'].includes(String(input.action)) ? photoCutout : cutout)(input, identity);
     return business(group, input, identity);

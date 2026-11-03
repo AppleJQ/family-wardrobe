@@ -3,4 +3,5 @@ export const APP_ROUTES = {
   home: '/pages/home/index',
   wardrobe: '/pages/cloud/index?section=wardrobe',
   family: '/pages/cloud/index?section=account',
+  notebook: '/pages/notebook/index',
 };

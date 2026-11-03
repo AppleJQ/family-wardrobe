@@ -6,3 +6,16 @@ export type ExportDocumentOptions = {
   fail?: (error: ExportDocumentFailure) => void;
 }
 export type ExportDocument = (options: ExportDocumentOptions) => void
+export type ReadLocalBase64Options = {
+  filePath: string;
+  success: (base64: string) => void;
+  fail: (error: ExportDocumentFailure) => void;
+}
+export type ReadLocalBase64 = (options: ReadLocalBase64Options) => void
+export type WriteLocalBase64Options = {
+  filePath: string;
+  base64: string;
+  success: () => void;
+  fail: (error: ExportDocumentFailure) => void;
+}
+export type WriteLocalBase64 = (options: WriteLocalBase64Options) => void

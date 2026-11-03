@@ -7,4 +7,17 @@ declare module '@/uni_modules/family-file-export' {
     fail?: (error: ExportDocumentFailure) => void;
   }
   export function exportDocument(options: ExportDocumentOptions): void;
+  export interface ReadLocalBase64Options {
+    filePath: string;
+    success: (base64: string) => void;
+    fail: (error: ExportDocumentFailure) => void;
+  }
+  export function readLocalBase64(options: ReadLocalBase64Options): void;
+  export interface WriteLocalBase64Options {
+    filePath: string;
+    base64: string;
+    success: () => void;
+    fail: (error: ExportDocumentFailure) => void;
+  }
+  export function writeLocalBase64(options: WriteLocalBase64Options): void;
 }

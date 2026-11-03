@@ -43,6 +43,9 @@ return definePage({
   openWardrobe() {
     if (this.data.ready && this.data.family) wx.navigateTo({ url: APP_ROUTES.wardrobe });
   },
+  openNotebook() {
+    if (this.data.ready && this.data.family) wx.navigateTo({ url: APP_ROUTES.notebook });
+  },
   openFamily() { wx.navigateTo({ url: APP_ROUTES.family }); },
   viewPrivacy() {
     wx.openPrivacyContract({ fail: () => wx.showToast({ title: '暂时无法打开隐私指引', icon: 'none' }) });

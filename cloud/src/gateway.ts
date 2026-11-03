@@ -8,6 +8,8 @@ const MAX_BODY_BYTES = 1024 * 1024;
 const fail = (code: string, message: string): never => { throw new BusinessError(code, message); };
 const actions: Record<string, readonly string[]> = {
   updates: ['check'],
+  notebook: ['home', 'list', 'get', 'create', 'update', 'delete', 'restore', 'purge', 'toggle', 'copy',
+    'images.upload', 'images.get', 'ai.parse', 'ai.query', 'ai.get', 'profile.link', 'reminders.subscribe'],
   auth: ['register', 'login', 'logout', 'me', 'bind'],
   bootstrapUser: ['bootstrap', 'home'],
   families: ['create', 'get', 'rename', 'remove', 'transfer', 'leave'],

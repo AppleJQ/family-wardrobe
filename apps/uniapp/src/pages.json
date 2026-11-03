@@ -2,6 +2,7 @@
   "pages": [
     { "path": "pages/home/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "小猪猪的家" } },
     { "path": "pages/cloud/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "家庭衣橱" } },
+    { "path": "pages/notebook/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "家庭记事" } },
     { "path": "pages/login/index", "style": { "navigationBarTitleText": "登录我们的家" } },
     { "path": "pages/privacy/index", "style": { "navigationBarTitleText": "隐私保护指引" } }
   ],

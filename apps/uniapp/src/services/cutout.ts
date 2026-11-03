@@ -1,4 +1,4 @@
-import {localPath,writeBase64} from '../platform/files';
+import {displayPath,localPath,removeFile,writeBase64} from '../platform/files';
 import { call } from './cloud';
 
 export type CutoutMode = 'goods' | 'common';
@@ -19,9 +19,16 @@ export const processCutout = async (garmentId: string, mode: CutoutMode, request
 export const applyCutout = (garmentId: string, requestId: string, version: number) => call<{ version: number }>('cutout', 'apply', { garmentId, requestId, version, mode: 'common' });
 export const getPhotoCutout = async (requestId: string) => displayResult(await call<CutoutResult>('cutout', 'getPhoto', { requestId }));
 export const processPhotoCutout = async (requestId: string, base64: string) => displayResult(await call<CutoutResult>('cutout', 'processPhoto', { requestId, base64 }));
-export async function saveCutoutPreview(base64: string): Promise<string> {
+export async function saveCutoutPreview(base64: string, fileName = `cutout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`): Promise<string> {
   if (!base64.startsWith('iVBORw0KGgo') || base64.length > Math.ceil(2 * 1024 * 1024 / 3) * 4) throw new Error('抠图结果无法读取，请重查');
-  const path = localPath(`cutout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`);
+  const path = localPath(fileName);
   await writeBase64(path,base64);
+  try {
+    const image = await uni.getImageInfo({ src: displayPath(path) });
+    if (!(image.width > 0 && image.height > 0)) throw new Error('Invalid image dimensions');
+  } catch {
+    try { await removeFile(path); } catch { /* Retry can use the existing remote result. */ }
+    throw new Error('预览图片无法加载，请重新查看去背景结果，原图已保留');
+  }
   return path;
 }

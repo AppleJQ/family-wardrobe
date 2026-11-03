@@ -19,10 +19,13 @@ export async function httpCall<T>(group:string,action:string,data:Record<string,
   if(!/^https:\/\//i.test(base) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(base))throw new CloudError('NOT_CONFIGURED','服务地址需要使用 HTTPS');
   const session=getSession();
   let result:Envelope<T>;
+  let statusCode:number;
   try{
     const response=await uni.request({url:base,method:'POST',data:{group,action,data},header:{'Content-Type':'application/json',...(session?{Authorization:`Bearer ${session.token}`}:{})},timeout:isInitialRead(group,action)?15000:35000});
+    statusCode=response.statusCode;
     result=response.data as Envelope<T>;
   }catch{throw new CloudError('NETWORK','暂时无法连接，请检查网络后重试');}
+  if(statusCode===413)throw new CloudError('PAYLOAD_TOO_LARGE','图片请求过大，请重新选择较小的照片');
   return unpack(result,session?.token);
 }
 function unpack<T>(result:Envelope<T>,dispatchedToken?:string):T{
@@ -63,16 +66,25 @@ export async function authCall<T>(action:string,data:Record<string,unknown>={}):
   return httpCall<T>('auth',action,data);
   // #endif
 }
-export async function prepareImage(path:string):Promise<{path:string;base64:string}>{
+export async function prepareImage(path:string,options:{maxBytes?:number}={}):Promise<{path:string;base64:string}>{
+  const maxBytes=options.maxBytes||512*1024;
+  const encodedLimit=Math.ceil(maxBytes/3)*4;
   let base64=await readBase64(path);
   const info=await uni.getImageInfo({src:displayPath(path)});
   const supported=base64.startsWith('iVBORw0KGgo')||base64.startsWith('/9j/');
-  if(supported && info.width*info.height<=4000000 && base64.length<=Math.ceil(512*1024/3)*4)return{path,base64};
-  const ratio=Math.min(1,1600/Math.max(info.width,info.height));
-  for(const quality of [75,50,30]){
-    const compressed=await compressPhoto(path,Math.round(info.width*ratio),Math.round(info.height*ratio),quality);
-    base64=await readBase64(compressed);
-    if(base64.length<=Math.ceil(512*1024/3)*4)return{path:compressed,base64};
+  if(supported && info.width*info.height<=4000000 && base64.length<=encodedLimit)return{path,base64};
+  const dimensions=maxBytes<512*1024?[1024,800,640,512,384]:[1600];
+  for(const longest of dimensions){
+    const ratio=Math.min(1,longest/Math.max(info.width,info.height));
+    for(const quality of [75,50,30]){
+      const compressed=await compressPhoto(path,Math.max(1,Math.round(info.width*ratio)),Math.max(1,Math.round(info.height*ratio)),quality);
+      base64=await readBase64(compressed);
+      if(base64.length<=encodedLimit)return{path:compressed,base64};
+    }
   }
-  throw new CloudError('IMAGE_TOO_LARGE','图片压缩后仍超过512KB，请换一张较小的照片');
+  throw new CloudError('IMAGE_TOO_LARGE','图片压缩后仍过大，请换一张较小的照片');
 }
+// HTTP access rejects request bodies above 100 KiB before our function runs.
+// Keep Base64 processing payloads below that limit, with room for JSON fields.
+// The original local draft and final uploaded photo keep their existing budget.
+export const prepareProcessingImage=(path:string)=>prepareImage(path,{maxBytes:isWechat?512*1024:60*1024});

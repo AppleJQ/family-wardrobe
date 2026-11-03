@@ -2,8 +2,8 @@
     "name" : "小猪猪的家",
     "appid" : "__UNI__7872CC1",
     "description" : "一家人的日常，放在一起。",
-    "versionName" : "0.3.4",
-    "versionCode" : 304,
+    "versionName" : "0.3.10",
+    "versionCode" : 310,
     "transformPx" : false,
     "vueVersion" : "3",
     "uniStatistics" : {

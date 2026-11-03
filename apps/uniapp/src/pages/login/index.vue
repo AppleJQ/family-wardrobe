@@ -4,7 +4,7 @@ import {authCall} from '../../services/cloud';import {setSession,type Session} f
 import AppUpdatePanel from '../../components/AppUpdatePanel.vue';
 const mode=ref<'login'|'register'|'bind'>('login'),username=ref(''),password=ref(''),confirmation=ref(''),busy=ref(false),error=ref(''),returnTo=ref('/pages/home/index'),agreed=ref(false);
 const title=computed(()=>mode.value==='bind'?'让同一个家，跨设备相见':mode.value==='register'?'给一家人的日常，安个家':'欢迎回到我们的家');
-onLoad(options=>{mode.value=options?.mode==='bind'&&isWechat?'bind':'login';const target=options?.returnTo?decodeURIComponent(options.returnTo):'';if(/^\/pages\/(home|cloud)\/index(\?section=(account|wardrobe))?$/.test(target))returnTo.value=target;});
+onLoad(options=>{mode.value=options?.mode==='bind'&&isWechat?'bind':'login';const target=options?.returnTo?decodeURIComponent(options.returnTo):'';if(/^\/pages\/(home|cloud|notebook)\/index(\?section=(account|wardrobe))?$/.test(target))returnTo.value=target;});
 function switchMode(){mode.value=mode.value==='login'?'register':'login';password.value='';confirmation.value='';error.value='';}
 function privacy(){uni.navigateTo({url:'/pages/privacy/index'});}
 async function submit(){

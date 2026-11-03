@@ -231,3 +231,88 @@ HTTP事件/集成响应遵循 [CloudBase HTTP访问云函数](https://docs.cloud
 契约为platform、packageName、versionCode、versionName、url、sha256、size、notes。包名固定com.applejq.familyhome；URL只接受HTTPS APK、无凭据/片段；SHA256为64位小写十六进制；APK最大256MiB、说明最多1200字符、JSON最多4096字节。客户端同样校验契约，只向高于当前原生APK版本号更新。
 
 2026-10-28开发网关代码已更新，真实匿名检查返回200/release:null，匿名家庭读取仍401；尚未设置发布元数据、上传APK或发布更新。用户要求先完成代码，APK打包已由用户取消，Android原生Kotlin编译和真机安装仍待后续。
+
+## MP-001 家庭记事
+
+2026-11-03 已随 Android 0.3.9（309）部署到现有环境：7个记事集合及索引、notebook、notebookCleanup、notebookReminders 和 multiPlatformApi；集合权限 ADMINONLY，定时函数禁止客户端调用。notebookCleanup 每5分钟运行，已有持久扫描记录。notebookReminders 未配置timer，微信提醒及Android推送保持未开通。16项云端合成数据流程已通过，临时业务数据与账号已清理；真实AI调用、微信投递和安卓真机覆盖升级尚未验收。
+
+新增独立 `notebook` 微信 Event Function，以及 HTTP `multiPlatformApi` 的 `notebook` 业务组；复用可信微信身份、私有 Bearer 会话及家庭权限。双方家庭账号同权，笔记所属成员与日程参与人均可使用 `family_members` 档案 ID。2026-11-03 表单修复新增可选 `participantMemberIds`：允许未绑定账号的成员参加日程；服务端校验成员属于当前家庭，从其当前有效绑定计算 `participantUserIds`，不能把档案 ID 当作提醒账号。旧客户端只传 `participantUserIds` 时仍校验有效家庭账号；旧记录无需批量迁移。账户显示名优先取绑定档案名，再取 username，最后回退家人编号；不会随查看者交换身份。此增量已随 Android 0.3.10（310）更新 notebook、multiPlatformApi、notebookReminders 和 notebookCleanup；线上7项合成验证通过，未绑定成员保存、有效账号派生及旧格式编辑正常，临时家庭与账号已定向清理。4个函数代码下载后与本地产物逐文件摘要一致，原配置及触发器保留，提醒通道仍未开通。APK签名、匿名完整下载摘要和公开更新接口核对通过；安卓真机覆盖升级仍待验收。发布记录见 `.tmp/app-releases/release-310-state.json`。
+
+公开无平台依赖契约见 `cloud/src/notebook-model.ts`。HTTP 正文为 `{group:"notebook",action,data}`；微信调用 `notebook` 时传 `{action,...data}`。成功包装均为 `{ok:true,data}`，失败沿用业务错误包装。
+清单可选 `category` 仅允许“购物／出行／办事／其他”，创建省略默认“其他”，编辑省略保留原值，复制保留；笔记和日程仅允许省略或空字符串，兼容旧记录。
+
+| action | data | 成功 data |
+| --- | --- | --- |
+| home | 可选 limit、cursor | userId/familyId/familyName/members/accounts/entries/cursor/capabilities |
+| list | status=active/deleted，可选 kind/cursor/limit | `{items,cursor}`，默认50、上限100；满页提供下一页游标，无总量截断 |
+| get | entryId | NotebookEntry |
+| create | requestId、entry | NotebookEntry；entry.kind=event/list/note |
+| update | entryId、version、patch | NotebookEntry；不能切换 kind |
+| delete / restore / purge | entryId、version | NotebookEntry；软删除、30天内恢复、永久清理 |
+| toggle | entryId、version、itemId、done | NotebookEntry；服务端记录实际完成者和时间 |
+| copy | entryId、version、requestId | 新清单，重置勾选和完成者，保留原清单 |
+| images.upload | requestId、photoBase64 | `{id,url}`；JPG/PNG复用512KiB/400万像素校验与去元数据 |
+| images.get | imageIds | `{id,url}[]`；每次重新校验家庭、图片状态并签发300秒链接 |
+| profile.link | memberId、version | `{memberId}`；只能认领未绑定/已绑定本人的档案，已绑定另一档案时明确拒绝 |
+| ai.parse / ai.query | requestId、text | NotebookAiResult；不会直接创建日程 |
+| ai.get | requestId | 重查当前账号在当前家庭的原请求，unknown不自动重提交 |
+| reminders.subscribe | entryId、version | `{enabled,message}`；仅当前参与账号登记自己的微信提醒，不接收openid/收件人 |
+
+创建/修改图片只接收 `imageIds`，客户端不能写 URL/fileID。笔记创建必须选择有效成员档案；历史未归属笔记仍可读。日程只做单次安排，日期和参与人必填，开始时间可留空（时间待定），结束时间必须晚于开始时间；跨天请分成独立安排。提醒字段保存业务意图；微信提醒另需下述完整配置与本人订阅登记，默认关闭。
+
+日程可通过 listId/noteId 关联当前家庭的有效清单/笔记。软删关联内容不会删除日程，客户端展示关联不可用；恢复保留勾选和完成者。purge 保留无正文的幂等 tombstone，清理图片引用并逐条断开日程关联；不会删除日程。存储清理失败返回 `CLEANUP_PENDING`，持久保留待清理 asset IDs，重复原操作可继续，不能把失败当成功。旧版本/不同内容复用请求编号分别报 CONFLICT/REQUEST_CONFLICT。所有写操作使用事务及 membership 写栅栏；读操作在签名图片后再次核实权限。
+
+### 新增集合与索引
+
+以下集合必须全部拒绝客户端直接读写：`{"read":false,"write":false,"create":false,"update":false,"delete":false}`。图片所在私有 CloudBase 存储同样禁止匿名读取，不能配置为公共桶。
+
+- `notebook_entries`：统一 event/list/note；索引 `familyId ASC,status ASC,createdAt DESC,_id DESC`，及 `familyId ASC,status ASC,kind ASC,createdAt DESC,_id DESC`；永久清理关联扫描另需 `familyId ASC,kind ASC,createdAt DESC,_id DESC`。内置 `_id` 唯一索引承担创建/复制 requestId 幂等。
+- `notebook_assets`：私有图片元数据，含 familyId、状态、refCount、请求指纹和底层 fileID。内置 `_id` 唯一索引负责上传幂等；维护清理可增 `status ASC,updatedAt ASC`。底层 ID/path 永不返回前端。未经引用的上传图片及中断上传任务需要受控服务端清理，本次没有新增客户端批量删除接口。
+- `notebook_ai_requests`：索引 `familyId ASC,createdAt DESC,_id DESC`。记录请求指纹、状态、已校验结果、providerRequestId、token 用量和随机 fence；不保存密钥、原始用户请求文本或原始模型提示词。`users` 新增可选 notebookAiDay/notebookAiCalls 额度计数和 notebookFence 档案认领栅栏，不影响旧衣橱智能额度。
+- `notebook_reminder_subscriptions`：日程+用户确定性 `_id`；保存本人登记的日程版本、提醒计划指纹和模板，不保存客户端openid，不将登记视为微信额度证明。指纹包含家庭、日程、日期、开始时间、提前量和排序去重后的参与成员（旧记录仍使用参与账号）；缺指纹的旧登记需本人重新订阅。成员绑定在登记及投递时重新解析，只向有效绑定且本人订阅的账号发送；解绑或家庭权限失效后不会按缓存账号继续通知。
+- `notebook_reminder_deliveries`：日程+提醒计划指纹+用户+wechat 确定性 `_id`，独立投递去重账本。内容升版不改变投递身份。索引可加 `status ASC,updatedAt ASC` 供运维查未知结果；不开放客户端读取。
+- `notebook_reminder_scans`：按北京时间日期保存扫描游标；内置 `_id` 索引。定时扫描另需 `notebook_entries` 的 `kind ASC,status ASC,date ASC,createdAt DESC,_id DESC` 组合索引，不带家庭条件的查询只存在服务端timer。
+
+### 智能配置与实际部署条件
+
+`notebook` 和 `multiPlatformApi` 各自使用服务端 `DEEPSEEK_API_KEY`，复用已有 `createDeepSeekClient` 及其20秒超时、JSON输出和不自动重试行为；`NOTEBOOK_AI_DAILY_LIMIT` 默认每账号每北京时间自然日30个新请求，上限100。新请求事务计额；同编号重查不扣额。持续运行45秒后只显示 unknown，不重新收费提交。没有配置 key 时手工记事仍可用，能力显示 ai=false。
+
+解析结合服务端北京时间、明确日期和真实家庭成员。成员档案可在未绑定账号时进入AI草稿和查询；用户明确说出姓名时只匹配这些成员，只有未指定姓名的“一起”才使用全部成员。缺少明确日期或参与人时补问，模型返回草稿后由用户确认调用 create。查询先分页读取全部相关真实日程，候选超过120条时要求缩小范围；模型只筛选最多20个真实白名单 ID，答案由服务端按保存的时间/标题/参与人生成，避免模型自由编造安排。模型不修改数据库日程，也不把无记录解释为确定有空。
+
+`npm run check:cloud`、`npm run build:cloud` 生成13个独立函数包，其中 `.cloudbuild/notebook` 包含 notebook-runtime/service/model/ai/reminders 和 DeepSeek 依赖；`.cloudbuild/multiPlatformApi` 同步包含记事服务；`.cloudbuild/notebookReminders`、`.cloudbuild/notebookCleanup` 为独立定时函数。部署前需创建上述集合、索引及拒绝规则，再更新 HTTP 网关和新增 notebook 为 Nodejs20.19 Event、index.main、30秒，并分别配置服务端环境变量及最小数据库/私有存储权限。本地构建不创建云资源、不部署函数、不发真实 AI 请求。双账号云端事务、微信订阅消息真实投递及 Android 后台提醒另行验收。
+
+### 微信提醒配置与投递边界
+
+`notebook`、`multiPlatformApi`、`notebookReminders` 使用一致的服务端配置；任何缺失/非法配置都返回 capability `wechatReminder=false`，前端不会得到可用模板ID。旧 `NOTEBOOK_WECHAT_REMINDER_ENABLED` 不再启用能力。
+
+| 环境变量 | 规则 |
+| --- | --- |
+| NOTEBOOK_WECHAT_ENABLED | 只有字符串 `1` 开启；默认关闭，确认worker、权限、模板和来源验收后再开启 |
+| NOTEBOOK_WECHAT_TEMPLATE_ID | 微信公众平台当前小程序实际可用模板，不能编造或借用其他小程序模板 |
+| NOTEBOOK_WECHAT_TEMPLATE_FIELDS | JSON：真实模板关键词名映射到 `title` / `dateTime` / `place` / `participants`；必须含标题和日期时间。时间映射只允许实际time/date字段，文字使用实际thing/character_string字段，最多5项。字段名必须按实际模板填写，源码没有默认关键词 |
+| NOTEBOOK_WECHAT_STATE | `developer` / `trial` / `formal`，默认formal；须与实际验收环境一致 |
+
+用户主动点击后调用 `wx.requestSubscribeMessage`，仅模板结果为accept才请求 `reminders.subscribe{entryId,version}`。登记入口仍校验当前版本；服务端从可信当前账号及已有绑定 `users._openid` 解析收件人，登记覆盖当前提醒计划。改日期、开始时间、提前量或参与账号后需本人重新订阅；取消或删除日程停止发送。只改标题、地点、备注或清单/笔记关联不使登记失效，已经投递的相同计划也不会因内容升版或再次登记而重发。客户端即使伪造登记也不能制造微信真实额度，实际发送失败不算送达。开启登记返回enabled=true只表示已登记，仍受本人微信授权和剩余额度限制。
+
+独立 `notebookReminders` timer 计划每分钟运行（`0 * * * * * *`）；生成的config.json声明timer及 `subscribeMessage.send` 云调用权限，部署工具须确认实际应用。函数权限单独设 `{"invoke":false}`，不得开HTTP或匿名客户端入口。[CloudBase内置环境变量](https://docs.cloudbase.net/cloud-function/function-configuration/env)明确规定定时触发注入 `TRIGGER_SRC=timer`，代码只从这个受信环境变量映射timer身份，同时要求无微信openid和 `event.Type=Timer`。不使用SDK的SOURCE/TCB_SOURCE替代此检查，也不接受正文中的trigger_src/TRIGGER_SRC自证身份；调用结束清理该变量，防止暖实例残留。部署验收仍应验证真实触发和客户端伪造Timer被拒绝，不能仅依据event.Type放行。
+
+worker按北京时间当前日、次日及5分钟迟到窗口起点所在日去重后完整分页扫描active日程，覆盖午夜后仍在窗口内的前一天安排。首版微信通道支持0～1440分钟提前量；无具体时间/超过一天的提醒明确不登记，不把它们伪装成可用提醒。到期允许5分钟迟到窗口，老提醒不补发；每轮最多扫描300条、尝试约50个收件人，持久游标让剩余页面后续继续，超大数据量仍需监控扫描周期是否低于迟到窗口。每个日程的参与人会完整处理，因此一次可能略超过50个目标。
+
+领取与发送前两次事务重新核对最新日程状态、提醒计划指纹、当前参与人、有效家庭/账号/membership和本人登记；对日程referenceFence及membership/user写栅栏，避免仅凭旧列表快照发送。账本先claim并租约60秒，发送前持久标为sending；仅尚未开始发送的过期claim可重领。接口明确返回errCode=0记为accepted（微信接受请求，非用户已读/已收）；43101等明确拒收记为rejected。网络超时/未知返回记unknown，不自动重发；发送中进程中断保留sending，同样不重发。数据库事务和微信外部调用无法原子提交，最后一次校验后已在途的消息无法保证撤回。
+
+官方接口：[客户端订阅](https://developers.weixin.qq.com/miniprogram/dev/api/open-api/subscribe-message/wx.requestSubscribeMessage.html)、[服务端发送](https://developers.weixin.qq.com/miniprogram/dev/server/API/mp-message-management/subscribe-message/api_sendmessage.html)。本轮仅假发送器和内存仓储验证，未开通模板、未部署timer、未真实投递。Android通道尚未启用，不在manifest中假设已有Push模块。
+
+### 记事生命周期与私有图片定时补偿
+
+新增 `notebookCleanup` 为受控 timer，不接 HTTP、微信客户端动作或任意客户端参数。生成包声明每5分钟触发 `0 */5 * * * * *`，部署为 Nodejs20.19 Event、index.main、30秒，函数权限必须单独设为 `{"invoke":false}`。runtime仅从官方内置环境变量 `TRIGGER_SRC=timer` 映射可信source，并与领域入口一起复用 `assertNotebookTimer`：必须同时满足可信运行时 source=timer、没有openid、event.Type=Timer；伪造正文Type/trigger_src和SOURCE/TCB_SOURCE均不能获得清理权限。调用结束清理TRIGGER_SRC，依据同上[官方环境变量表](https://docs.cloudbase.net/cloud-function/function-configuration/env)。
+
+公开服务端 API 为 `createNotebookCleanup(repo, storage, {now?, scanLimit?, batchSize?}).run(event, {source, openid})`；options仅用于服务端及本地验证，运行入口不会读取event中的扫描大小或身份。返回busy/scanned/expired/assetsDeleted/linksDetached/failed统计；failed大于零表示留有补偿，不能报告全部完成。
+
+- 已软删满30天的条目，事务中擦除正文、标题、成员归属、日历内容、清单及图片关联，只保留身份/时间/版本/幂等指纹等轻量tombstone。事务撤销每张图片refCount；仅无引用图标记待清理。未到30天的内容及其图片保持可恢复。
+- 孤立active图片达到24小时、未完成uploading达到1小时、failed、deleted和显式purge残留都会重试。每张图片先在事务内复核refCount=0并claim status=deleted，之后才能调用私有存储删除；并发新增引用必须读取active并写同一资产，因此会冲突或拒绝。refCount仍为正的图片不会删除。
+- 物理删除成功后只清该资产自己持有且本轮成功删除的fileId/cleanupFileIds。确认无其他待删句柄后清cloudPath/fingerprint。删除失败/数据库响应丢失保留句柄，后续timer重试。过期uploading尚无fileId时保留路径和指纹；晚到上传被deleted状态拒绝，服务端把返回的文件句柄追加到cleanupFileIds，不把已claim的资产重新激活。若供应商上传响应始终未返回文件句柄，仅凭路径无法证明物理对象状态，该信息会保留供受控运维核对，不宣称已删。
+- 独立event扫描只断开指向purged条目的listId/noteId并递增日程版本，不删除日程。软删目标的关联保留，恢复后继续使用。
+
+新增 `notebook_cleanup_scans` 集合，使用与其余服务端集合相同的全拒绝客户端读写规则；内置_id索引，单条maintenance-v1保存55秒租约和entries/assets/events三条持久游标。每轮每条扫描线默认最多50条，每页25条、每处理一条持久checkpoint；完整扫描后回卷。新产生的前页不会阻止旧游标继续，单条失败也保留补偿并前移、下个完整周期重试，不存在固定总量截断。单条purged记录的历史图片补偿每轮最多处理10个并旋转剩余项，避免一个永久失败对象挡住后续图片。若进程中断，最多重复尚未checkpoint的幂等操作；租约阻止正常重叠任务抢占进度。
+
+全局entries/assets分页需 `createdAt DESC,_id DESC` 索引；全局event扫描另建 `kind ASC,createdAt DESC,_id DESC`。本轮仅本地仓储、假存储与打包验证，未创建集合/索引、未部署timer、未删除云端图片。

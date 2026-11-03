@@ -41,6 +41,11 @@ const { appName, statusBarHeight, assets, family, members, accounts, loading, re
 <view class="home-section-title">
 <text>家里的小事</text>
 </view>
+<view v-if="family" class="module-card notebook-module" @tap="handlers.openNotebook">
+<view class="module-top"><view class="module-icon"><text class="notebook-symbol">▤</text></view><text class="module-title">家庭记事</text></view>
+<text class="module-description">日历、清单和笔记，一起记住生活。<text>哪天做什么，打开就知道。</text></text>
+<view class="module-bottom"><text>打开记事</text><text>↗</text></view>
+</view>
 <view v-if="family" class="module-card" @tap="handlers.openWardrobe">
 <view class="module-top">
 <view class="module-icon">
@@ -107,6 +112,8 @@ const { appName, statusBarHeight, assets, family, members, accounts, loading, re
 .module-bottom { display: flex; justify-content: space-between; align-items: center; border-top: 1rpx solid #d3dfcd; margin-top: 30rpx; padding-top: 24rpx; font-size: 25rpx; color: #456b53; font-weight: 600; }
 .module-bottom > text:last-child { font-size: 35rpx; }
 .module-unjoined { background: #f0f1e9; }
+.notebook-module { margin-bottom: 28rpx; }
+.notebook-symbol { font-size: 50rpx; color: #456b53; }
 .family-welcome { text-align: center; padding: 32rpx; background: #fffefa; border: 1rpx solid #e2e7dc; border-radius: 24rpx; }
 .family-welcome .family-symbol { margin: 0 auto 24rpx; }
 .welcome-title { display: block; font-size: 30rpx; font-weight: 600; margin-bottom: 14rpx; }

@@ -14,6 +14,7 @@ onLaunch(() => {
 });
 </script>
 <style>
+@import './pages/notebook/notebook.css';
 page { background:#f8f7f2; color:#29372f; font-family:'PingFang SC','Microsoft YaHei',sans-serif; font-size:28rpx; }
 button::after { border:0; }
 view,text,image { box-sizing:border-box; }
