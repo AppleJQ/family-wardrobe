@@ -3,6 +3,8 @@ import { computed } from 'vue';
 import type { NotebookEntry, NotebookHome } from '../../services/notebook';
 import NotebookSheet from './NotebookSheet.vue';
 import { dateLabel, participantNames } from '../../services/notebook-state';
+import { isWechat } from '../../platform/runtime';
+import { androidReminderState, canEnableNotebookReminder, supportsAndroidReminders } from '../../services/android-reminders';
 const props=defineProps<{entry:NotebookEntry;home:NotebookHome;entries:NotebookEntry[];busy:boolean}>();
 const emit=defineEmits<{close:[];edit:[];remove:[];copy:[];toggle:[id:string,done:boolean];open:[entry:NotebookEntry];trash:[];subscribe:[]}>();
 const accountName=(id:string)=>props.home.accounts.find(a=>a.userId===id)?.name||'家庭成员';
@@ -12,6 +14,15 @@ const linkedNote=computed(()=>props.entries.find(e=>e.id===props.entry.noteId));
 const related=computed(()=>props.entries.filter(e=>e.kind==='event'&&e.status==='active'&&(e.listId===props.entry.id||e.noteId===props.entry.id)));
 const completed=computed(()=>props.entry.items.filter(i=>i.done).length);
 const date=(time:number)=>new Date(time+8*3600000).toISOString().slice(0,10);
+const hasReminder=computed(()=>props.entry.reminderMinutes!==null&&!!props.entry.startTime);
+const canSubscribe=computed(()=>canEnableNotebookReminder(props.entry,props.home.userId));
+const androidSupported=supportsAndroidReminders();
+const reminderHint=computed(()=>{
+  if(isWechat)return props.home.capabilities.wechatReminder?'微信与 Android 提醒可同时开启；微信需本人订阅，每次授权以微信实际结果为准':'微信提醒尚未开通，日程已保存';
+  if(!androidSupported)return '当前平台暂不支持通知提醒，可在微信小程序订阅';
+  if(androidReminderState.userId===props.home.userId&&androidReminderState.familyId===props.home.familyId&&androidReminderState.message)return androidReminderState.message;
+  return '可开启我的 Android 提醒；厂商离线通道尚未开通，应用关闭或锁屏后可能无法收到';
+});
 function preview(url:string){uni.previewImage({current:url,urls:props.entry.images.map(i=>i.url)});}
 </script>
 <template>
@@ -22,8 +33,8 @@ function preview(url:string){uni.previewImage({current:url,urls:props.entry.imag
       <view class="nb-detail-row"><text>参与人</text><view>{{participantNames(entry,home).join('、')}}</view></view>
       <view v-if="entry.place" class="nb-detail-row"><text>地点</text><view>{{entry.place}}</view></view>
       <view class="nb-detail-row"><text>状态</text><view>{{entry.eventState==='cancelled'?'已取消':entry.eventState==='completed'?'已完成':'已安排'}}</view></view>
-      <view class="nb-detail-row"><text>提醒</text><view>{{entry.reminderMinutes&&entry.startTime?'提前'+entry.reminderMinutes+'分钟':'不提醒'}}<text v-if="entry.reminderMinutes&&entry.startTime" class="nb-caption nb-block">{{home.capabilities.wechatReminder?'微信需本人订阅，App通道尚未开通':'通知通道尚未开通，日程已保存'}}</text></view></view>
-      <button v-if="entry.reminderMinutes&&entry.participantUserIds.includes(home.userId)&&entry.eventState==='planned'" class="nb-secondary" :disabled="busy" @tap="emit('subscribe')">开启我的提醒</button>
+      <view class="nb-detail-row"><text>提醒</text><view>{{hasReminder?(entry.reminderMinutes===0?'日程开始时':'提前'+entry.reminderMinutes+'分钟'):'不提醒'}}<text v-if="hasReminder" class="nb-caption nb-block">{{reminderHint}}</text></view></view>
+      <button v-if="canSubscribe&&(isWechat||androidSupported)" class="nb-secondary" :disabled="busy" @tap="emit('subscribe')">{{isWechat?'管理我的微信提醒':'管理我的 Android 提醒'}}</button>
       <view v-if="entry.listId" class="nb-field"><text>关联清单</text><button v-if="linkedList&&linkedList.status==='active'" class="nb-link-card" :disabled="busy" @tap="emit('open',linkedList)"><text>{{linkedList.title}}</text><text class="nb-caption">{{linkedList.items.filter(i=>i.done).length}}/{{linkedList.items.length}} 已完成 ›</text></button><button v-else class="nb-link-card" @tap="emit('trash')">关联清单已移入回收站，恢复后继续使用 ›</button></view>
       <view v-if="entry.noteId" class="nb-field"><text>关联笔记</text><button v-if="linkedNote&&linkedNote.status==='active'" class="nb-link-card" @tap="emit('open',linkedNote)">{{linkedNote.title}} ›</button><button v-else class="nb-link-card" @tap="emit('trash')">关联笔记已移入回收站 ›</button></view>
     </template>

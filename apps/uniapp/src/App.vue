@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { onLaunch } from '@dcloudio/uni-app';
+import { onLaunch, onShow } from '@dcloudio/uni-app';
 import { initFiles } from './platform/files';
 import { CLOUD_ENV } from './config/cloud';
 import {watchSessionChanges} from './services/session';
 import { checkStartupUpdate } from './services/app-update';
+import { startAndroidReminders, refreshAndroidReminders } from './services/android-reminders';
 onLaunch(() => {
   // #ifdef MP-WEIXIN
   wx.cloud.init({env:CLOUD_ENV});
   // #endif
   void initFiles().catch(()=>{});
   watchSessionChanges();
+  startAndroidReminders();
   checkStartupUpdate();
 });
+onShow(() => { startAndroidReminders(); void refreshAndroidReminders().catch(() => {}); });
 </script>
 <style>
 @import './pages/notebook/notebook.css';

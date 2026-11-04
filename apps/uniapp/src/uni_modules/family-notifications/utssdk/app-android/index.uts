@@ -1,0 +1,23 @@
+import { NotificationAccess } from 'uts.sdk.modules.familyNotifications';
+import { NotificationPermissionOptions } from '../interface.uts';
+
+export function createInstallationKey(): string {
+  return NotificationAccess.installationKey();
+}
+export function ensureNotificationChannel(): void {
+  const context = UTSAndroid.getAppContext();
+  if (context !== null) NotificationAccess.ensureChannel(context);
+}
+export function notificationsEnabled(): boolean {
+  const context = UTSAndroid.getAppContext();
+  return context !== null && NotificationAccess.enabled(context);
+}
+export function requestNotificationPermission(options: NotificationPermissionOptions): void {
+  const activity = UTSAndroid.getUniActivity();
+  if (activity === null) { options.fail({ message: '请返回应用后重试' }); return; }
+  NotificationAccess.ensureChannel(activity);
+  if (!NotificationAccess.needsPermission(activity)) { options.success(NotificationAccess.enabled(activity)); return; }
+  UTSAndroid.requestSystemPermission(activity, ['android.permission.POST_NOTIFICATIONS'],
+    (_allRight: boolean, _grantedList: string[]) => { options.success(NotificationAccess.enabled(activity)); },
+    (_doNotAskAgain: boolean, _grantedList: string[]) => { options.success(false); });
+}

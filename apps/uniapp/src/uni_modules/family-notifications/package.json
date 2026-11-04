@@ -1,0 +1,7 @@
+{
+  "id": "family-notifications",
+  "displayName": "家庭日程 Android 通知权限",
+  "version": "1.0.0",
+  "description": "Request notification permission and generate a private installation key.",
+  "uni_modules": { "dependencies": [], "encrypt": [] }
+}

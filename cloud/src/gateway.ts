@@ -9,7 +9,10 @@ const fail = (code: string, message: string): never => { throw new BusinessError
 const actions: Record<string, readonly string[]> = {
   updates: ['check'],
   notebook: ['home', 'list', 'get', 'create', 'update', 'delete', 'restore', 'purge', 'toggle', 'copy',
-    'images.upload', 'images.get', 'ai.parse', 'ai.query', 'ai.get', 'profile.link', 'reminders.subscribe'],
+    'images.upload', 'images.get', 'ai.parse', 'ai.query', 'ai.get', 'profile.link', 'reminders.subscribe',
+    'reminders.device.register', 'reminders.device.unregister', 'reminders.preference', 'reminders.status',
+    'cycle.home', 'cycle.setup', 'cycle.settings.update', 'cycle.period.save', 'cycle.period.delete', 'cycle.period.restore',
+    'cycle.daily.save', 'cycle.daily.delete', 'cycle.daily.restore', 'cycle.ai.analyze', 'cycle.ai.get', 'cycle.ai.latest'],
   auth: ['register', 'login', 'logout', 'me', 'bind'],
   bootstrapUser: ['bootstrap', 'home'],
   families: ['create', 'get', 'rename', 'remove', 'transfer', 'leave'],

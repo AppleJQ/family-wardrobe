@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import {ref,computed} from 'vue';import {onLoad} from '@dcloudio/uni-app';
-import {authCall} from '../../services/cloud';import {setSession,type Session} from '../../services/session';import {isWechat} from '../../platform/runtime';
+import {authCall} from '../../services/cloud';import {getSession,setSession,type Session} from '../../services/session';import {isWechat} from '../../platform/runtime';
+import { prepareAndroidAccountChange } from '../../services/android-reminders';
 import AppUpdatePanel from '../../components/AppUpdatePanel.vue';
 const mode=ref<'login'|'register'|'bind'>('login'),username=ref(''),password=ref(''),confirmation=ref(''),busy=ref(false),error=ref(''),returnTo=ref('/pages/home/index'),agreed=ref(false);
 const title=computed(()=>mode.value==='bind'?'让同一个家，跨设备相见':mode.value==='register'?'给一家人的日常，安个家':'欢迎回到我们的家');
-onLoad(options=>{mode.value=options?.mode==='bind'&&isWechat?'bind':'login';const target=options?.returnTo?decodeURIComponent(options.returnTo):'';if(/^\/pages\/(home|cloud|notebook)\/index(\?section=(account|wardrobe))?$/.test(target))returnTo.value=target;});
+onLoad(options=>{mode.value=options?.mode==='bind'&&isWechat?'bind':'login';let target='';try{target=options?.returnTo?decodeURIComponent(options.returnTo):'';}catch{}if(/^\/pages\/(home|cloud|notebook)\/index(\?section=(account|wardrobe))?$/.test(target)||/^\/pages\/notebook\/index\?entryId=[a-zA-Z0-9_-]{1,120}$/.test(target))returnTo.value=target;});
 function switchMode(){mode.value=mode.value==='login'?'register':'login';password.value='';confirmation.value='';error.value='';}
 function privacy(){uni.navigateTo({url:'/pages/privacy/index'});}
 async function submit(){
@@ -18,7 +19,18 @@ async function submit(){
     const result=await authCall<Session>(mode.value,{username:username.value.trim().toLowerCase(),password:password.value});
     password.value='';confirmation.value='';
     if(mode.value==='bind'){uni.showToast({title:'账号已绑定',icon:'success'});uni.reLaunch({url:'/pages/home/index'});}
-    else{setSession(result);uni.reLaunch({url:returnTo.value});}
+    else{
+      const previous=getSession();
+      if(previous){
+        await prepareAndroidAccountChange();
+        if(getSession()?.token===previous.token){
+          let timer:ReturnType<typeof setTimeout>|undefined;
+          try{await Promise.race([authCall('logout').catch(()=>{}),new Promise<void>(resolve=>{timer=setTimeout(resolve,2500);})]);}
+          finally{if(timer!==undefined)clearTimeout(timer);}
+        }
+      }
+      setSession(result);uni.reLaunch({url:returnTo.value});
+    }
   }catch(e){error.value=e instanceof Error?e.message:'暂时无法登录，请稍后重试';}finally{busy.value=false;}
 }
 </script>

@@ -3,6 +3,7 @@ import {onMounted,onUnmounted,ref} from 'vue';
 import {authCall} from '../services/cloud';
 import {isWechat} from '../platform/runtime';
 import {clearSession,getSession} from '../services/session';
+import {prepareAndroidAccountChange} from '../services/android-reminders';
 const username=ref(getSession()?.username||'');const busy=ref(false);const error=ref('');
 const bindingReady=ref(!isWechat);
 const accountId=getSession()?.userId||'';let disposed=false;
@@ -24,6 +25,8 @@ async function logout(){
     if(!confirmation.confirm||!sameAccount())return;
     const session=getSession();if(!session||session.userId!==accountId)return;
     dispatchedToken=session.token;
+    await prepareAndroidAccountChange();
+    if(!sameAccount()||getSession()?.token!==dispatchedToken)return;
     await authCall('logout');
     if(!sameAccount()||getSession()?.token!==dispatchedToken)return;
     busy.value=false;clearSession();uni.reLaunch({url:'/pages/login/index'});

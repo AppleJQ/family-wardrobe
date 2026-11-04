@@ -300,7 +300,17 @@ worker按北京时间当前日、次日及5分钟迟到窗口起点所在日去�
 
 领取与发送前两次事务重新核对最新日程状态、提醒计划指纹、当前参与人、有效家庭/账号/membership和本人登记；对日程referenceFence及membership/user写栅栏，避免仅凭旧列表快照发送。账本先claim并租约60秒，发送前持久标为sending；仅尚未开始发送的过期claim可重领。接口明确返回errCode=0记为accepted（微信接受请求，非用户已读/已收）；43101等明确拒收记为rejected。网络超时/未知返回记unknown，不自动重发；发送中进程中断保留sending，同样不重发。数据库事务和微信外部调用无法原子提交，最后一次校验后已在途的消息无法保证撤回。
 
-官方接口：[客户端订阅](https://developers.weixin.qq.com/miniprogram/dev/api/open-api/subscribe-message/wx.requestSubscribeMessage.html)、[服务端发送](https://developers.weixin.qq.com/miniprogram/dev/server/API/mp-message-management/subscribe-message/api_sendmessage.html)。本轮仅假发送器和内存仓储验证，未开通模板、未部署timer、未真实投递。Android通道尚未启用，不在manifest中假设已有Push模块。
+官方接口：[客户端订阅](https://developers.weixin.qq.com/miniprogram/dev/api/open-api/subscribe-message/wx.requestSubscribeMessage.html)、[服务端发送](https://developers.weixin.qq.com/miniprogram/dev/server/API/mp-message-management/subscribe-message/api_sendmessage.html)。
+
+### 安卓个推与双端渠道选择
+
+客户端通过 uni-push 1.0 获取本设备 CID，申请通知权限后，使用登录会话登记设备。服务端只保存安装密钥的摘要，并在发送前重查会话、账号、家庭、参与人和日程；退出登录会阻止该设备后续发送。通知仅显示通用文字，点击后按本机账号权限打开日程。微信和Android使用独立开关，可同时启用；开启或关闭其中一端不会改变另一端。`reminders.preference`以`{channel:'wechat'|'android',enabled:boolean}`只修改指定开关；`reminders.status`返回`wechatEnabled`和`androidEnabled`，`channel`为兼容摘要（`both`表示双开）。旧312客户端的`channel:'none'`仅关闭Android。微信成功登记仅开启微信；旧单channel记录读取时保持原状态，不批量替用户开启另一端。
+
+需要新建服务端集合 `notebook_push_devices`、`notebook_reminder_preferences`、`notebook_android_deliveries`，全部设置 `ADMINONLY`。设备查询需要 `userId ASC, familyId ASC, status ASC, createdAt DESC, _id DESC` 复合索引。提醒定时函数和两个接口函数均需取得有效服务端配置：`NOTEBOOK_ANDROID_ENABLED=1`、`GETUI_APP_ID`、`GETUI_APP_KEY`、`GETUI_MASTER_SECRET`；密钥只配置云函数环境变量，禁止写进仓库和客户端。Android在线消息采用uni-push 1.0专用`{title,content,payload}`透传结构，由SDK在线时展示通知栏消息。厂商离线通道按实际注册并核实的厂商配置逗号分隔的`GETUI_ANDROID_OFFLINE_CHANNELS`，取值`XM,HW,HO,OP,VV,MZ,FCM`；小米`XM`还需`GETUI_XIAOMI_CHANNEL_ID`。配置变量不能代替DCloud/厂商平台开通凭据及打包配置。未开通相应厂商渠道时，应用后台或锁屏后可能无法收到。
+
+`notebookReminders` 需要每分钟 timer，权限限制为客户端不可调用；同时保留微信订阅消息 OpenAPI 授权。微信配置 `NOTEBOOK_WECHAT_ENABLED`、`NOTEBOOK_WECHAT_TEMPLATE_ID`、`NOTEBOOK_WECHAT_TEMPLATE_FIELDS` 和 `NOTEBOOK_WECHAT_STATE`。模板、服务端配置、客户端授权和真实设备验证都齐备后才可确认提醒实际可用。个推接口接受请求不等于手机收到；未开通对应品牌的厂商离线通道时，应用进入后台/锁屏后的送达无法保证。
+
+微信定时发送必须额外在微信开发者工具对`notebookReminders/config.json`执行“上传触发器”（或在微信云开发控制台保存规则），由官方工具登记定时云调用系统票据。普通CloudBase创建timer只提供调度，CLI上传函数仅登记OpenAPI白名单，两者均不能替代票据登记。不能输出或手动填充票据；出现`Invalid wxCloudApiToken`需通过微信工具修复登记。runtime保留平台`TRIGGER_SRC/WX_CONTEXT_KEYS`，只清用户身份，避免温实例丢失票据选择信息。账本保留安全数字错误码；代码/接口成功不代表用户已收消息。
 
 ### 记事生命周期与私有图片定时补偿
 
@@ -316,3 +326,22 @@ worker按北京时间当前日、次日及5分钟迟到窗口起点所在日去�
 新增 `notebook_cleanup_scans` 集合，使用与其余服务端集合相同的全拒绝客户端读写规则；内置_id索引，单条maintenance-v1保存55秒租约和entries/assets/events三条持久游标。每轮每条扫描线默认最多50条，每页25条、每处理一条持久checkpoint；完整扫描后回卷。新产生的前页不会阻止旧游标继续，单条失败也保留补偿并前移、下个完整周期重试，不存在固定总量截断。单条purged记录的历史图片补偿每轮最多处理10个并旋转剩余项，避免一个永久失败对象挡住后续图片。若进程中断，最多重复尚未checkpoint的幂等操作；租约阻止正常重叠任务抢占进度。
 
 全局entries/assets分页需 `createdAt DESC,_id DESC` 索引；全局event扫描另建 `kind ASC,createdAt DESC,_id DESC`。本轮仅本地仓储、假存储与打包验证，未创建集合/索引、未部署timer、未删除云端图片。
+
+## 经期管理（2026-11-03，本地实现待部署）
+
+在 `notebook` 微信事件函数和既有 HTTP `notebook` 业务组内增加经期操作，两端共享 `cycle-model.ts`，事件与HTTP返回沿用 `{ok,data}`。`expectedFamilyId`由当前页面快照提供，服务端再次验证有效家庭和经期档案共享名单；家庭后来新增账号不会自动取得访问权。首期一个家庭一份经期档案，成员归属与共享账号分开，最多两个有效账号且包含操作者。常规记事内容权限保持原规则。
+
+- `cycle.home`：读取当前授权档案、北京时间today、最近6个完整周期/已结束经期统计、预测与原因和AI可用状态。未启用返回profile=null；无共享权限返回FORBIDDEN，不当成空档案。
+- `cycle.setup`：requestId、memberId、accessUserIds、settings（cycleLength为15–60整数或null，periodLength为1–20整数或null，predictionPaused为boolean），可选period `{start,end}`。未知设置保持null，不编造默认值。
+- `cycle.settings.update`：version、requestId、settings、accessUserIds；记录对象memberId固定，双方可维护设置与共享名单。
+- `cycle.period.save`：version、requestId、period `{id?,start,end}`。`end=''`表示未结束；禁止未来、非法或重叠实际日期，未结束经期仅能位于最后。
+- `cycle.period.delete/restore`：version、requestId、periodId。`cycle.daily.save`：version、requestId、daily `{date,flow,symptoms,mood,intimacy,ovulationTest}`。`cycle.daily.delete/restore`：version、requestId、date。每日与起止独立，不互相连带删除；删后30天内恢复，过期隐藏并在后续写入裁除，不承诺当前已有定时物理删除。
+- 所有写返回完整CycleHome。整体version防双端覆盖；持久cycle_mutations回执按家庭/账号/requestId去重，payload指纹匹配返回当前档案，同ID异内容拒绝。成功回执与档案在同一事务保存。
+- `cycle.ai.analyze`：version、requestId；`cycle.ai.get`：本人原requestId；`cycle.ai.latest`：授权双方最近一份成功报告。服务端固定快照并用现有DeepSeek适配，结果带数据范围、确定统计、生成时间、源版本和stale。模型从与资料匹配的受控建议代码中选择，服务端校验代码与统计后渲染解读，模型自由文本不直接展示或写入真实记录。
+- 新AI任务默认每账号北京时间每日30次，复用已有NOTEBOOK_AI_DAILY_LIMIT配置；独立cycleAiDay/cycleAiCalls计数。相同请求不再调用供应商；未知提交只查原任务。失败由用户主动选择新任务，不自动重发付费请求。供应商已返回的用量按任务fence保存，发起者后续失权不会抹除账，返回客户端时仍重新鉴权。
+
+新增集合全部设为ADMINONLY，禁止客户端直接读写：`cycle_profiles`（确定性_id，一家庭一档案）、`cycle_mutations`（确定性_id幂等回执，只存指纹和审计）、`cycle_ai_requests`（任务状态、校验后结果、费用确定性/用量，原始prompt和密钥不保存）。AI最新结果查询需要索引 `familyId ASC,status ASC,createdAt DESC,_id DESC`；其余主要按_id读取。档案含最多120次保留经期与1500天每日记录，超限明确报错，不静默截断。
+
+预测与完整统计分开计算：保留所有实际记录和统计，在最近6个完整周期中选取15–60天的间隔取平均；已结束经期中选取1–20天的持续记录估算结束日期。缺少可参考样本时分别使用手填参考值，不编造默认值。部分间隔未参与估算、跨度超过7天、样本少于3个时继续给出初步估算，并通过predictionReason说明来源、排除数量及不确定性；这些范围仅为当前算法的估算边界，不作健康分类。主动暂停、缺少实际开始日期或可参考天数、预测与实际记录重叠时不生成日期。过期估算不自动顺延，排卵/易孕期仅按日历法估算，不用于避孕；AI只做按需解读，不覆盖日期。
+
+部署本功能需先创建上述3个集合、权限和AI索引，然后更新 `notebook` 与 `multiPlatformApi`（构建会携带cycle-model/core/service/ai）。无需新增函数或通知timer，不改旧提醒配置。当前仅完成本地实现和合成联调，尚未创建云端集合、部署、调用真实健康AI或发布新版APK。

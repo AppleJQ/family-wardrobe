@@ -11,7 +11,10 @@ for (const name of groups) {
   const files = ['model.js', 'identity.js', 'service.js', 'adapter.js', 'runtime.js', 'cleanup.js', 'image.js', 'wardrobe-service.js', 'wardrobe-runtime.js', 'performance.js'];
   if (name === 'ai') files.push('ai-runtime.js', 'ai-service.js', 'deepseek.js');
   if (['notebook', 'multiPlatformApi', 'notebookReminders', 'notebookCleanup'].includes(name)) files.push('notebook-participants.js');
+  if (['notebook', 'multiPlatformApi', 'notebookReminders', 'notebookCleanup'].includes(name)) files.push('notebook-notification-model.js');
+  if (['notebook', 'multiPlatformApi', 'notebookReminders'].includes(name)) files.push('notebook-android-reminders.js', 'getui.js');
   if (name === 'notebook' || name === 'multiPlatformApi') files.push('notebook-model.js', 'notebook-service.js', 'notebook-ai.js', 'notebook-reminders.js', 'deepseek.js');
+  if (name === 'notebook' || name === 'multiPlatformApi') files.push('cycle-model.js', 'cycle-core.js', 'cycle-service.js', 'cycle-ai.js');
   if (name === 'notebookReminders') files.push('notebook-model.js', 'notebook-reminders.js', 'notebook-reminder-runtime.js');
   if (name === 'notebookCleanup') files.push('notebook-model.js', 'notebook-reminders.js', 'notebook-cleanup.js', 'notebook-cleanup-runtime.js');
   if (name === 'notebook') files.push('notebook-runtime.js');

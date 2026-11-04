@@ -1,13 +1,16 @@
 import { isWechat } from '../platform/runtime';
 const sessionKey='family-home-session-v1';
 let observedUserId='';let watching=false;
+const sessionListeners = new Set<() => void>();
+export function onSessionChanged(listener: () => void): () => void { sessionListeners.add(listener); return () => { sessionListeners.delete(listener); }; }
+function notifySessionChanged() { for (const listener of sessionListeners) listener(); }
 export interface Session { token:string; expiresAt:number; userId:string; username:string }
 export function getSession():Session|null {
   const value=uni.getStorageSync(sessionKey) as Session|null;
   return value && typeof value.token==='string' && value.expiresAt>Date.now()?value:null;
 }
-export function setSession(session:Session) { uni.setStorageSync(sessionKey,session); observedUserId=session.userId; }
-export function clearSession() { uni.removeStorageSync(sessionKey); observedUserId=''; }
+export function setSession(session:Session) { uni.setStorageSync(sessionKey,session); observedUserId=session.userId; notifySessionChanged(); }
+export function clearSession() { uni.removeStorageSync(sessionKey); observedUserId=''; notifySessionChanged(); }
 export function watchSessionChanges():void {
   // #ifdef H5
   if(watching)return;watching=true;observedUserId=getSession()?.userId||'';

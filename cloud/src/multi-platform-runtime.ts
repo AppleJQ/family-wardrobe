@@ -12,6 +12,7 @@ import { Input } from './model';
 import { checkAndroidUpdate } from './app-update';
 import { createNotebookService } from './notebook-service';
 import { readNotebookWechatConfig } from './notebook-reminders';
+import { createGetuiClient, readGetuiConfig } from './getui';
 
 cloud.init({ env: 'wardrobe-dev-cloude-d5bv128b6099' });
 const repo = createRepository(), storage = createStorage(), business = createService(repo, storage);
@@ -29,6 +30,7 @@ const notebook = createNotebookService(repo, storage, {
   provider: createDeepSeekClient({ apiKey: process.env.DEEPSEEK_API_KEY }),
   dailyLimit: Number(process.env.NOTEBOOK_AI_DAILY_LIMIT || 30),
   wechatReminders: readNotebookWechatConfig(process.env),
+  androidReminders: createGetuiClient(readGetuiConfig(process.env)),
 });
 const gateway = createGateway({
   updates: data => checkAndroidUpdate(data, process.env.ANDROID_UPDATE_RELEASE || ''),

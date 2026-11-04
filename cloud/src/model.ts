@@ -1,4 +1,6 @@
 import type { NotebookRecord, NotebookAsset, NotebookAiRequest, NotebookReminderSubscription, NotebookReminderDelivery, NotebookReminderScan, NotebookCleanupScan } from './notebook-model';
+import type { CycleProfileRecord, CycleAiRequest, CycleMutationReceipt } from './cycle-model';
+import type { NotebookPushDevice, NotebookReminderPreference, NotebookAndroidDelivery } from './notebook-notification-model';
 export interface Base { _id: string; createdAt: number; updatedAt: number }
 export interface User extends Base {
   _openid: string; activeFamilyId: string; status: 'active' | 'blocked'; lastLoginAt: number;
@@ -7,6 +9,7 @@ export interface User extends Base {
   aiDay?: string; aiCalls?: number;
   cutoutDay?: string; cutoutCalls?: number;
   notebookAiDay?: string; notebookAiCalls?: number; notebookFence?: number;
+  cycleAiDay?: string; cycleAiCalls?: number;
   photoCutouts?: PhotoCutoutTask[];
 }
 // Server-only credentials/session records. Never expose these collections to clients.
@@ -82,7 +85,11 @@ export interface Entities {
   notebook_entries: NotebookRecord; notebook_assets: NotebookAsset; notebook_ai_requests: NotebookAiRequest;
   notebook_reminder_subscriptions: NotebookReminderSubscription; notebook_reminder_deliveries: NotebookReminderDelivery;
   notebook_reminder_scans: NotebookReminderScan;
+  notebook_push_devices: NotebookPushDevice; notebook_reminder_preferences: NotebookReminderPreference;
+  notebook_android_deliveries: NotebookAndroidDelivery;
   notebook_cleanup_scans: NotebookCleanupScan;
+  cycle_profiles: CycleProfileRecord; cycle_ai_requests: CycleAiRequest;
+  cycle_mutations: CycleMutationReceipt;
 }
 export type Collection = keyof Entities;
 export interface ListOptions {

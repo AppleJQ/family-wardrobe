@@ -3,7 +3,9 @@ import { onLoad, onShow, onHide, onUnload, onBackPress } from '@dcloudio/uni-app
 import { notebook, type NotebookEntry, type NotebookHome, type NotebookWrite, type NotebookKind, type NotebookAiResult, type NotebookImage, type NotebookDraft } from './notebook';
 import { getSession, requireLogin } from './session';
 import { isWechat } from '../platform/runtime';
+import { call } from './cloud';
 import { beijingToday, createRequestScope, findConflicts, requestId, copyNotebookData } from './notebook-state';
+import { androidReminderState, canEnableNotebookReminder, enableAndroidReminders, disableAndroidReminders, supportsAndroidReminders } from './android-reminders';
 
 export interface NotebookEditor {
   id: string; version: number; requestId: string; kind: NotebookKind; title: string; body: string;
@@ -164,12 +166,51 @@ export function useNotebook() {
   }
   function resetAi(){aiRequest.value='';aiResult.value=null;}
   async function subscribe(entry: NotebookEntry) {
+    const home=snapshot.value;
+    if(!home||!canEnableNotebookReminder(entry,home.userId)){report(new Error('只有仍在安排中、有具体时间的日程参与人可以开启自己的提醒'));return;}
     // #ifdef MP-WEIXIN
-    if(!snapshot.value?.capabilities.wechatReminder||!snapshot.value.capabilities.wechatTemplateId){report(new Error('微信提醒尚未开通，日程已保存'));return;}
-    if(!entry.participantUserIds.includes(snapshot.value.userId)){report(new Error('只有参与人可以订阅自己的提醒'));return;}
-    try{const id=snapshot.value.capabilities.wechatTemplateId;const result=await wx.requestSubscribeMessage({tmplIds:[id]});if(result[id]!=='accept'){uni.showToast({title:'未开启微信提醒',icon:'none'});return;}await mutate(async()=>{const receipt=await notebook.subscribe(entry);uni.showToast({title:receipt.message,icon:'none',duration:3000});});}catch(err){report(err);}return;
+    await subscribeWechat(entry);return;
     // #endif
-    report(new Error('App通知通道尚未开通，日程已保存'));
+    await subscribeAndroid(entry);
+  }
+  async function subscribeWechat(entry: NotebookEntry) {
+    const home=snapshot.value;
+    if(!home||!canEnableNotebookReminder(entry,home.userId))return;
+    const owner=account(),family=home.familyId;
+    const choice=await uni.showActionSheet({itemList:['订阅我的微信提醒','关闭我的微信提醒']}).catch(()=>null);
+    if(!choice||!usable(owner,family))return;
+    if(choice.tapIndex===1){
+      if(!await confirm('将关闭当前账号的微信日程提醒，Android 提醒、已有微信授权和日程会保留。','关闭微信提醒','关闭微信')||!usable(owner,family))return;
+      await mutate(async()=>{
+        await call('notebook','reminders.preference',{expectedFamilyId:family,channel:'wechat',enabled:false});
+        if(usable(owner,family))uni.showToast({title:'已关闭微信提醒，Android 提醒保留',icon:'none',duration:3000});
+      });return;
+    }
+    if(!home.capabilities.wechatReminder||!home.capabilities.wechatTemplateId){report(new Error('微信提醒尚未开通，日程已保存'));return;}
+    if(!await confirm('微信与 Android 提醒可同时开启，已有 Android 提醒会保留。微信提醒需要本人授权，具体次数以微信授权结果为准。','订阅微信提醒','继续订阅')||!usable(owner,family))return;
+    try{
+      const id=home.capabilities.wechatTemplateId,result=await wx.requestSubscribeMessage({tmplIds:[id]});
+      if(!usable(owner,family))return;
+      if(result[id]!=='accept'){uni.showToast({title:'未开启微信提醒',icon:'none'});return;}
+      await mutate(async()=>{const receipt=await notebook.subscribe(entry);if(usable(owner,family))uni.showToast({title:receipt.message,icon:'none',duration:3000});});
+    }catch(err){if(usable(owner,family))report(err);}
+  }
+  async function subscribeAndroid(entry: NotebookEntry) {
+    const home=snapshot.value;
+    if(!home||!canEnableNotebookReminder(entry,home.userId))return;
+    if(!supportsAndroidReminders()){report(new Error('当前平台暂不支持 Android 提醒，可在微信小程序订阅微信提醒'));return;}
+    const owner=account(),family=home.familyId;
+    const current=androidReminderState.userId===home.userId&&androidReminderState.familyId===family&&androidReminderState.androidEnabled;
+    if(current){
+      const choice=await uni.showActionSheet({itemList:['重新检查 Android 提醒','关闭我的 Android 提醒']}).catch(()=>null);
+      if(!choice||!usable(owner,family))return;
+      if(choice.tapIndex===1){
+        if(!await confirm('将关闭当前账号的 Android 日程提醒，微信提醒和已保存的日程会保留。','关闭 Android 提醒','关闭提醒')||!usable(owner,family))return;
+        await mutate(async()=>{await disableAndroidReminders({userId:home.userId,familyId:family});if(usable(owner,family))uni.showToast({title:'已关闭 Android 提醒，微信提醒保留',icon:'none',duration:3000});});return;
+      }
+    }
+    if(!await confirm('开启后，当前账号参与的所有后续日程将使用 Android 提醒，微信提醒可同时保留。需要允许系统通知；厂商离线通道尚未开通，应用关闭或锁屏后可能无法收到。','开启 Android 提醒','开启提醒')||!usable(owner,family))return;
+    await mutate(async()=>{await enableAndroidReminders({userId:home.userId,familyId:family});if(usable(owner,family))uni.showToast({title:'已开启 Android 提醒，关闭应用后可能无法收到',icon:'none',duration:3500});});
   }
   onLoad((options)=>{disposed=false;initialEntryId=typeof options?.entryId==='string'&&/^[a-zA-Z0-9_-]{1,120}$/.test(options.entryId)?options.entryId:'';void refresh();});
   onShow(()=>{if(initialShow){initialShow=false;return;}void refresh();});

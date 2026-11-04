@@ -4,6 +4,7 @@ import { BusinessError } from './service';
 import { Identity, Input, Repository, Unit } from './model';
 import { NotebookRecord, NotebookReminderDelivery } from './notebook-model';
 import { notebookParticipantUserIds } from './notebook-participants';
+import { notebookReminderSettings } from './notebook-notification-model';
 
 type LogicalField = 'title' | 'dateTime' | 'place' | 'participants';
 export interface NotebookWechatConfig {
@@ -59,6 +60,7 @@ function due(row: NotebookRecord, now: number) {
   return time !== null && time <= now && time >= now - LATE_WINDOW;
 }
 const subscriptionId = (entryId: string, userId: string) => hash(`notebook/subscription/${entryId}/${userId}`);
+const preferenceId = (familyId: string, userId: string) => hash(`notebook/preference/${familyId}/${userId}`);
 // Content edits and detached links do not create a different reminder plan.
 const scheduleFingerprint = (row: NotebookRecord) => hash(JSON.stringify([
   row.familyId, row._id, row.date, row.startTime, row.reminderMinutes,
@@ -99,6 +101,10 @@ export function createNotebookReminders(repo: Repository, options: NotebookRemin
       await unit.put('notebook_reminder_subscriptions', { _id: id, familyId: row.familyId, entryId: row._id,
         entryVersion: row.version, scheduleFingerprint: scheduleFingerprint(row), userId,
         templateId: config.templateId, createdAt: previous?.createdAt || now(), updatedAt: now() });
+      const prefId = preferenceId(row.familyId, userId), pref = await unit.get('notebook_reminder_preferences', prefId);
+      const settings = notebookReminderSettings({ ...notebookReminderSettings(pref), wechatEnabled: true });
+      await unit.put('notebook_reminder_preferences', { _id: prefId, familyId: row.familyId, userId, ...settings,
+        version: (pref?.version || 0) + 1, createdAt: pref?.createdAt || now(), updatedAt: now() });
       await unit.put('notebook_entries', { ...row, referenceFence: row.referenceFence + 1 });
       // The registration records this account's request, not WeChat quota or receipt.
       return { enabled: true, message: '已登记本日程的微信提醒，实际发送以微信订阅权限为准' };
@@ -110,11 +116,14 @@ export function createNotebookReminders(repo: Repository, options: NotebookRemin
       || !due(row, now()) || !(await notebookParticipantUserIds(unit, row, true)).includes(userId)) return null;
     const user = await account(unit, userId, row.familyId, true);
     const sub = await unit.get('notebook_reminder_subscriptions', subscriptionId(row._id, userId));
+    const pref = await unit.get('notebook_reminder_preferences', preferenceId(row.familyId, userId));
+    if (!notebookReminderSettings(pref).wechatEnabled) return null;
     if (!user?._openid || !sub || sub.entryId !== row._id || sub.familyId !== row.familyId || sub.userId !== userId
       || sub.scheduleFingerprint !== scheduleFingerprint(row) || sub.templateId !== config.templateId) return null;
     // Snapshot-isolation protection: cancellation/edit and membership removal write
     // these same documents and therefore conflict with a concurrent claim.
     await unit.put('notebook_entries', { ...row, referenceFence: row.referenceFence + 1 });
+    if (pref) await unit.put('notebook_reminder_preferences', { ...pref, version: pref.version + 1 });
     return { row, openid: user._openid };
   }
   async function deliver(snapshot: NotebookRecord, userId: string) {
@@ -152,7 +161,10 @@ export function createNotebookReminders(repo: Repository, options: NotebookRemin
       errorCode = typeof code === 'number' ? String(code) : 'UNKNOWN_RESULT';
     } catch (error) {
       const code = error && typeof error === 'object' ? (error as { errCode?: unknown; errcode?: unknown }).errCode ?? (error as { errcode?: unknown }).errcode : undefined;
-      if (code === 43101) { status = 'rejected'; errorCode = '43101'; } else errorCode = 'SEND_RESULT_UNKNOWN';
+      if (typeof code === 'number' && Number.isSafeInteger(code)) {
+        errorCode = String(code);
+        if ([-604100, -604101, -604104, 40003, 40037, 41030, 43101, 47003].includes(code)) status = 'rejected';
+      } else errorCode = 'SEND_RESULT_UNKNOWN';
     }
     await repo.transaction(async unit => {
       const ledger = await unit.get('notebook_reminder_deliveries', id);

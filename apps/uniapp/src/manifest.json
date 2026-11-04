@@ -2,8 +2,8 @@
     "name" : "小猪猪的家",
     "appid" : "__UNI__7872CC1",
     "description" : "一家人的日常，放在一起。",
-    "versionName" : "0.3.10",
-    "versionCode" : 310,
+    "versionName" : "0.3.13",
+    "versionCode" : 313,
     "transformPx" : false,
     "vueVersion" : "3",
     "uniStatistics" : {
@@ -27,11 +27,23 @@
     },
     "app-plus" : {
         "usingComponents" : true,
+        "modules" : {
+            "Push" : {}
+        },
         "distribute" : {
+            "sdkConfigs" : {
+                "push" : {
+                    "unipush" : {
+                        "version" : "1",
+                        "offline" : true
+                    }
+                }
+            },
             "android" : {
                 "packagename" : "com.applejq.familyhome",
                 "permissions" : [
                     "<uses-permission android:name=\"android.permission.INTERNET\"/>",
+                    "<uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\"/>",
                     "<uses-permission android:name=\"android.permission.CAMERA\"/>",
                     "<uses-permission android:name=\"android.permission.REQUEST_INSTALL_PACKAGES\"/>"
                 ]

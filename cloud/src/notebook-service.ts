@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
-import { identityUserId } from './identity';
+import { identitySession, identityUserId } from './identity';
+import { createNotebookAndroidReminders } from './notebook-android-reminders';
+import { NotebookAndroidSender } from './notebook-notification-model';
 import { BusinessError } from './service';
 import { Collection, Entities, Identity, ImageStorage, Input, ListOptions, Repository, Unit } from './model';
 import { AiProvider } from './deepseek';
@@ -7,6 +9,8 @@ import { NotebookAsset, NotebookEntry, NotebookHome, NotebookItem, NotebookRecor
 import { createNotebookAi } from './notebook-ai';
 import { createNotebookReminders, NotebookWechatConfig, readNotebookWechatConfig } from './notebook-reminders';
 import { notebookParticipantUserIds } from './notebook-participants';
+import { createCycleService } from './cycle-service';
+import { createCycleAi } from './cycle-ai';
 
 const RETENTION = 30 * 86400000;
 const hash = (v: string) => createHash('sha256').update(v).digest('hex');
@@ -133,11 +137,15 @@ export interface NotebookOptions {
   now?: () => number; provider?: AiProvider; dailyLimit?: number; wechatTemplateId?: string;
   wechatReminderEnabled?: boolean;
   wechatReminders?: NotebookWechatConfig;
+  androidReminders?: { configured: boolean; offlineAvailable?: boolean; send?: NotebookAndroidSender };
 }
 export function createNotebookService(repo: Repository, storage: ImageStorage, options: NotebookOptions = {}) {
   const now = options.now || Date.now;
   const reminderConfig = options.wechatReminders || readNotebookWechatConfig({});
   const reminders = createNotebookReminders(repo, { config: reminderConfig, now });
+  const androidReminders = createNotebookAndroidReminders(repo, { ...options.androidReminders, configured: Boolean(options.androidReminders?.configured), now });
+  const cycle = createCycleService(repo, { now, aiAvailable: Boolean(options.provider?.configured) });
+  const cycleAi = createCycleAi({ repo, now, provider: options.provider, dailyLimit: options.dailyLimit, load: cycle.load });
   async function auth(unit: Unit, userId: string, expectedFamily = '') {
     const user = await unit.get('users', userId);
     if (!user || user.status !== 'active') return fail('UNAUTHENTICATED', '请重新登录');
@@ -344,10 +352,18 @@ export function createNotebookService(repo: Repository, storage: ImageStorage, o
     const expectedFamilyId = text(input.expectedFamilyId, 120, true), familyId = text(input.familyId, 120, true);
     if (expectedFamilyId && familyId && expectedFamilyId !== familyId) return fail('NO_FAMILY', '家庭信息不一致，请刷新后重试');
     const action = text(input.action, 40), scope = await auth(repo, userId, expectedFamilyId || familyId);
+    if (action.startsWith('cycle.')) {
+      const { expectedFamilyId: _expected, familyId: _family, ...data } = input;
+      return action.startsWith('cycle.ai.') ? cycleAi.handle(data, userId, scope.familyId) : cycle.handle(data, userId, scope.familyId);
+    }
     if (action.startsWith('ai.')) return ai.handle(input, userId, scope.familyId);
     if (action === 'reminders.subscribe') {
       const { expectedFamilyId: _expected, familyId: _family, ...data } = input;
       return reminders.subscribe(data, identity);
+    }
+    if (['reminders.device.register', 'reminders.device.unregister', 'reminders.preference', 'reminders.status'].includes(action)) {
+      const { expectedFamilyId: _expected, familyId: _family, ...data } = input;
+      return androidReminders.handle(data, userId, scope.familyId, identitySession(identity));
     }
     if (action === 'images.upload') return upload(userId, input, scope.familyId);
     if (action === 'images.get') return signImages(userId, scope.familyId, strings(input.imageIds, 100));

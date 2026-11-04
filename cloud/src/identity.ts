@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { AuthSession, Identity, Repository } from './model';
 
 const principals = new WeakMap<Identity, string>();
+const sessions = new WeakMap<Identity, { id: string; expiresAt: number }>();
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 
 export function wechatUserId(identity: Identity): string | undefined {
@@ -16,6 +17,10 @@ export function identityUserId(identity: Identity): string | undefined {
   return identity && (principals.get(identity) || wechatUserId(identity));
 }
 
+export function identitySession(identity: Identity): { id: string; expiresAt: number } | undefined {
+  return identity && sessions.get(identity);
+}
+
 export async function verifySession(repo: Repository, token: string, now: number): Promise<{
   identity: Identity; session: AuthSession; username: string;
 } | null> {
@@ -27,5 +32,6 @@ export async function verifySession(repo: Repository, token: string, now: number
     || account.userId !== user._id || user.username !== account.username) return null;
   const identity = Object.freeze({ openid: '', appid: '', source: '' });
   principals.set(identity, user._id);
+  sessions.set(identity, { id: session._id, expiresAt: session.expiresAt });
   return { identity, session, username: account.username };
 }
